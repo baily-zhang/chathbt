@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scan to join ChatHBT</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{--bg:#0d0d0d;--card:#1a1a1c;--line:#2c2c30;--text:#ececec;--muted:#9a9aa0;--acc:#10a37f}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:ui-sans-serif,-apple-system,system-ui,"Segoe UI",Arial,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;gap:28px}
+header{display:flex;align-items:center;gap:14px}
+header img{width:56px;height:56px;border-radius:14px}
+header h1{font-size:clamp(28px,5vw,44px);margin:0;font-weight:600;letter-spacing:-.02em}
+.tag{color:var(--muted);font-size:clamp(15px,2.2vw,20px);text-align:center;margin:-14px 0 0}
+.cards{display:flex;gap:28px;flex-wrap:wrap;justify-content:center}
+.card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:24px 24px 20px;text-align:center;width:min(360px,92vw)}
+.card h2{margin:0 0 4px;font-size:24px;font-weight:600}
+.card p{margin:0 0 18px;color:var(--muted);font-size:15px}
+.qr{background:#fff;border-radius:16px;padding:16px;display:inline-block;line-height:0}
+.qr img,.qr canvas{width:min(280px,70vw)!important;height:auto!important}
+.url{margin-top:14px;font:13px ui-monospace,Menlo,monospace;color:var(--muted);word-break:break-all}
+.card.model{border-color:#10a37f66}
+.card.model h2{color:#4fd1a8}
+</style>
+</head>
+<body>
+<header><img src="/logo.svg" alt=""><h1>ChatHBT</h1></header>
+<p class="tag">ChatGPT, but the model is a random human. Possibly you.</p>
+<div class="cards">
+  <div class="card">
+    <h2>💬 Ask ChatHBT</h2>
+    <p>Ask anything. A human will make something up.</p>
+    <div class="qr" id="qrChat"></div>
+    <div class="url" id="urlChat"></div>
+  </div>
+  <div class="card model">
+    <h2>🧠 Become the model</h2>
+    <p>Answer strangers. Be dumb or be rejected.</p>
+    <div class="qr" id="qrModel"></div>
+    <div class="url" id="urlModel"></div>
+  </div>
+</div>
+<script>
+const base = location.origin;
+const make = (el, url) => {
+  document.getElementById('url' + el).textContent = url.replace(/^https?:\/\//, '');
+  if (window.QRCode) new QRCode(document.getElementById('qr' + el), { text: url, width: 512, height: 512, colorDark: '#0d0d0d', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+  else document.getElementById('qr' + el).textContent = url; // QR library failed to load: show the link instead
+};
+make('Chat', base + '/');
+make('Model', base + '/model');
+</script>
+</body>
+</html>
