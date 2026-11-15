@@ -239,12 +239,16 @@ function handle(m) {
     $('#online').textContent = humans + (humans === 1 ? ' human' : ' humans') + ' online';
     return;
   }
-  if (!pending || m.qid !== pending.qid) return;
+  if (!pending) return;
+  // Events can arrive before the /ask response tells us our qid: keep them until then.
+  if (pending.qid == null) { pending.early.push(m); return; }
+  if (m.qid !== pending.qid) return;
   if (m.type === 'matched') { pending.matched = true; clearTimeout(pending.ladder); setStatus(model.includes('Thinking') ? 'Thinking longer for a better answer' : 'Thinking'); }
   if (m.type === 'draft') onDraft(m.text);
   if (m.type === 'answer') onAnswer(m.text);
   if (m.type === 'break') onError("The model is on break. Per its union contract, breaks last 15 minutes. Please try again later.");
   if (m.type === 'lobotomy') onLobotomy(m.attempt);
+  if (m.type === 'asleep') { pending.matched = false; setStatus('Model fell asleep 😴 Waking up another human…'); clearTimeout(pending.ladder); waitLadder(pending); }
 }
 
 // ---------- sending ----------
@@ -276,13 +280,15 @@ async function submit() {
   thread.appendChild(userEl(text));
   const el = aiShell();
   thread.appendChild(el.root);
-  pending = { el, qid: null, trace: [], prev: [], start: Date.now(), firstDraft: 0, matched: false };
+  pending = { el, qid: null, early: [], trace: [], prev: [], start: Date.now(), firstDraft: 0, matched: false };
   setStatus('Finding a human…');
   refreshSend();
   scrollDown(true);
   const r = await post('/ask', { text, model });
   if (!pending) return;
   pending.qid = r.qid;
+  for (const m of pending.early.splice(0)) handle(m);
+  if (!pending) return;
   waitLadder(pending);
 }
 

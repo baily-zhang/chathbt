@@ -35,6 +35,10 @@ button.primary:hover{filter:brightness(1.1)}
 #work{display:none}
 body.busy #work{display:flex;flex-direction:column;gap:16px}
 body.busy #idle{display:none}
+#zzz{display:none;text-align:center;padding:50px 20px;color:var(--muted)}
+#zzz .big{font-size:44px;margin-bottom:12px}
+body.asleep #zzz{display:block}
+body.asleep #idle{display:none}
 .meter{margin-top:14px}
 .meter .bar{height:10px;border-radius:999px;background:linear-gradient(90deg,#10a37f,#e8c20a 55%,#e8410a);position:relative}
 .meter .needle{position:absolute;top:-5px;width:4px;height:20px;border-radius:2px;background:#fff;box-shadow:0 0 0 2px #0f0f10;transition:left .25s}
@@ -68,6 +72,12 @@ body.busy #idle{display:none}
     <div>Waiting for a user prompt… keep this tab open.</div>
   </div>
 
+  <div class="card" id="zzz">
+    <div class="big">😴</div>
+    <div style="font-size:18px;color:var(--text);margin-bottom:6px">You fell asleep. The prompt went to another human.</div>
+    <div style="margin-bottom:16px">Your GPU has been downclocked.</div>
+    <button class="primary" id="wake">I'm awake, give me prompts</button>
+  </div>
   <div id="work">
     <div class="card" id="qcard">
       <div class="label"><span>User prompt</span><span>context window: 1 message · <span id="timer">0s</span></span></div>
@@ -139,6 +149,7 @@ function onMsg(m) {
   if (m.type === 'stats') $('#stats').textContent = `${m.humans} human${m.humans === 1 ? '' : 's'} online · ${m.queue} in queue`;
   if (m.type === 'question') start(m);
   if (m.type === 'cancel' && m.qid === qid) { stop(); toast('User stopped generating.'); }
+  if (m.type === 'asleep' && m.qid === qid) { stop(); sleepy(true); }
 }
 
 async function post(url, body) {
@@ -238,6 +249,12 @@ function beep() {
 }
 function toast(t) { const s = $('#stats'); const old = s.textContent; s.textContent = t; setTimeout(() => (s.textContent = old), 2500); }
 
+// Fell asleep on a prompt: no more prompts until the human proves they are awake.
+function sleepy(on) {
+  document.body.classList.toggle('asleep', on);
+  if (on) { document.title = '😴 You fell asleep — HBT'; buzz(); }
+}
+$('#wake').onclick = async () => { sleepy(false); document.title = 'HBT Model Console'; await post('/wake', {}); };
 connect('model', id, onMsg, onState);
 </script>
 </body>

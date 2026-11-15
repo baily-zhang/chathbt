@@ -13,7 +13,8 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, 'public');
 const API_KEY = process.env.ANTHROPIC_API_KEY;
 const JUDGE_MODEL = process.env.JUDGE_MODEL || 'claude-haiku-5-5';
-const MAX_REJECTS = 2; // after this many "too smart" rejections we give up and let it through
+const MAX_REJECTS = 2;
+const AFK_MS = 25000; // a human who types nothing for this long is considered asleep // after this many "too smart" rejections we give up and let it through
 
 const clients = new Map();   // id -> { res|null, role, busy: qid|null, box: [], seq, seen }
 const questions = new Map(); // qid -> { qid, askerId, text, model, modelId, rejects }
@@ -48,6 +49,16 @@ function leave(id) {
 // Drop clients that have neither an open stream nor polled recently.
 setInterval(() => {
   for (const [id, c] of clients) if (!c.res && Date.now() - c.seen > 8000) leave(id);
+  // A human who got a prompt and typed nothing for a while fell asleep: give the prompt to someone else.
+  for (const q of questions.values()) {
+    if (!q.modelId || Date.now() - q.active < AFK_MS) continue;
+    const m = clients.get(q.modelId);
+    if (m) { m.busy = null; m.asleep = true; send(q.modelId, { type: 'asleep', qid: q.qid }); }
+    q.modelId = null;
+    queue.unshift(q.qid);
+    send(q.askerId, { type: 'asleep', qid: q.qid });
+    assign();
+  }
 }, 2000);
 const humans = () => [...clients].filter(([, c]) => c.role === 'model');
 
@@ -59,13 +70,14 @@ function broadcastStats() {
 // Hand queued questions to random idle humans.
 function assign() {
   while (queue.length) {
-    const idle = humans().filter(([, c]) => !c.busy);
+    const idle = humans().filter(([, c]) => !c.busy && !c.asleep);
     if (!idle.length) break;
     const q = questions.get(queue.shift());
     if (!q) continue;
     const [mid, m] = idle[Math.floor(Math.random() * idle.length)];
     m.busy = q.qid;
     q.modelId = mid;
+    q.active = Date.now();
     send(mid, { type: 'question', qid: q.qid, text: q.text, model: q.model });
     send(q.askerId, { type: 'matched', qid: q.qid });
   }
@@ -150,8 +162,14 @@ const routes = {
     setImmediate(assign);
     return { qid };
   },
+  async '/wake'(b) {
+    const c = clients.get(b.id);
+    if (c) { c.asleep = false; assign(); }
+    return { ok: true };
+  },
   async '/draft'(b) {
     const q = mine(b);
+    if (q) q.active = Date.now();
     if (q) send(q.askerId, { type: 'draft', qid: q.qid, text: String(b.text || '').slice(0, 4000) });
     return { ok: true };
   },
@@ -200,6 +218,7 @@ function openStream(req, res, url) {
   res.write(': hello\n\n');
   const c = join(id, role);
   c.res = res;
+  c.asleep = false; // a freshly opened page is awake by definition
   const ping = setInterval(() => res.write(': ping\n\n'), 15000);
   req.on('close', () => {
     clearInterval(ping);
