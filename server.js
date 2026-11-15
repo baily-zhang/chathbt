@@ -15,16 +15,40 @@ const API_KEY = process.env.ANTHROPIC_API_KEY;
 const JUDGE_MODEL = process.env.JUDGE_MODEL || 'claude-haiku-5-5';
 const MAX_REJECTS = 2; // after this many "too smart" rejections we give up and let it through
 
-const clients = new Map();   // id -> { res, role, busy: qid|null }
+const clients = new Map();   // id -> { res|null, role, busy: qid|null, box: [], seq, seen }
 const questions = new Map(); // qid -> { qid, askerId, text, model, modelId, rejects }
 const queue = [];            // qids waiting for a free human
 let qSeq = 1;
 
 // ---------- messaging ----------
+// Every message is numbered and kept in a small mailbox, so clients behind proxies
+// that buffer SSE (e.g. Cloudflare tunnels) can fall back to polling /poll.
 function send(id, msg) {
   const c = clients.get(id);
-  if (c) c.res.write(`data: ${JSON.stringify(msg)}\n\n`);
+  if (!c) return;
+  const m = { ...msg, seq: ++c.seq };
+  c.box.push(m);
+  if (c.box.length > 300) c.box.splice(0, c.box.length - 300);
+  if (c.res) c.res.write(`data: ${JSON.stringify(m)}\n\n`);
 }
+function join(id, role) {
+  let c = clients.get(id);
+  if (!c) { c = { res: null, role, busy: null, box: [], seq: 0, seen: Date.now() }; clients.set(id, c); setImmediate(assign); }
+  c.seen = Date.now();
+  return c;
+}
+function leave(id) {
+  clients.delete(id);
+  for (const q of [...questions.values()]) {
+    if (q.askerId === id) { if (q.modelId) send(q.modelId, { type: 'cancel', qid: q.qid }); finish(q.qid); }
+    else if (q.modelId === id) { q.modelId = null; queue.unshift(q.qid); } // human vanished: requeue
+  }
+  assign();
+}
+// Drop clients that have neither an open stream nor polled recently.
+setInterval(() => {
+  for (const [id, c] of clients) if (!c.res && Date.now() - c.seen > 8000) leave(id);
+}, 2000);
 const humans = () => [...clients].filter(([, c]) => c.role === 'model');
 
 function broadcastStats() {
@@ -172,28 +196,31 @@ function openStream(req, res, url) {
   const id = url.searchParams.get('id');
   const role = url.searchParams.get('role') === 'model' ? 'model' : 'asker';
   if (!id) { res.writeHead(400); return res.end(); }
-  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.write(': hello\n\n');
-  clients.set(id, { res, role, busy: null });
+  const c = join(id, role);
+  c.res = res;
   const ping = setInterval(() => res.write(': ping\n\n'), 15000);
   req.on('close', () => {
     clearInterval(ping);
-    const c = clients.get(id);
-    if (!c || c.res !== res) return; // a newer connection replaced this one
-    clients.delete(id);
-    for (const q of [...questions.values()]) {
-      if (q.askerId === id) { if (q.modelId) send(q.modelId, { type: 'cancel', qid: q.qid }); finish(q.qid); }
-      else if (q.modelId === id) { q.modelId = null; queue.unshift(q.qid); } // human vanished: requeue
-    }
-    assign();
+    if (c.res === res) { c.res = null; c.seen = Date.now(); } // reaper removes it unless it reconnects or polls
   });
   assign();
+}
+
+function poll(url) {
+  const id = url.searchParams.get('id');
+  if (!id) return [];
+  const c = join(id, url.searchParams.get('role') === 'model' ? 'model' : 'asker');
+  const since = Number(url.searchParams.get('since')) || 0;
+  return c.box.filter((m) => m.seq > since);
 }
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/events') return openStream(req, res, url);
   if (url.pathname === '/health') { res.writeHead(200); return res.end('ok'); }
+  if (url.pathname === '/poll') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end(JSON.stringify(poll(url))); }
 
   if (req.method === 'POST' && routes[url.pathname]) {
     const out = await routes[url.pathname](await readBody(req));

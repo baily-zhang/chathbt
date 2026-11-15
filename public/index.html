@@ -213,8 +213,21 @@ const FALLBACK = [
 ];
 
 // ---------- realtime ----------
-const es = new EventSource('/events?role=asker&id=' + uid);
-es.onmessage = (e) => handle(JSON.parse(e.data));
+// Realtime: SSE first; if a proxy buffers it (no message within 2.5s), poll instead.
+function connect(role, id, onMsg, onState) {
+  let last = 0, live = false, polling = false;
+  const deliver = (m) => { if (m.seq <= last) return; last = m.seq; live = true; onMsg(m); };
+  const es = new EventSource(`/events?role=${role}&id=${id}`);
+  es.onmessage = (e) => deliver(JSON.parse(e.data));
+  es.onopen = () => onState && onState(true);
+  es.onerror = () => !polling && onState && onState(false);
+  setTimeout(() => { if (!live) { es.close(); polling = true; onState && onState(true); poll(); } }, 2500);
+  function poll() {
+    fetch(`/poll?role=${role}&id=${id}&since=${last}`).then((r) => r.json()).then((ms) => ms.forEach(deliver))
+      .catch(() => {}).finally(() => setTimeout(poll, 350));
+  }
+}
+connect('asker', uid, handle);
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: uid, ...body }) });
   return r.json();

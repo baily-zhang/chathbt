@@ -120,16 +120,25 @@ const HINTS = {
   'HBT-mini': 'User picked HBT-mini: you are an intern. Hedge everything.',
 };
 
-function connect() {
-  const es = new EventSource('/events?role=model&id=' + id);
-  es.onopen = () => { $('#state').textContent = '● online'; $('#state').classList.add('live'); };
-  es.onerror = () => { $('#state').textContent = '○ reconnecting'; $('#state').classList.remove('live'); };
-  es.onmessage = (e) => {
-    const m = JSON.parse(e.data);
-    if (m.type === 'stats') $('#stats').textContent = `${m.humans} human${m.humans === 1 ? '' : 's'} online · ${m.queue} in queue`;
-    if (m.type === 'question') start(m);
-    if (m.type === 'cancel' && m.qid === qid) { stop(); toast('User stopped generating.'); }
-  };
+// Realtime: SSE first; if a proxy buffers it (no message within 2.5s), poll instead.
+function connect(role, id, onMsg, onState) {
+  let last = 0, live = false, polling = false;
+  const deliver = (m) => { if (m.seq <= last) return; last = m.seq; live = true; onMsg(m); };
+  const es = new EventSource(`/events?role=${role}&id=${id}`);
+  es.onmessage = (e) => deliver(JSON.parse(e.data));
+  es.onopen = () => onState && onState(true);
+  es.onerror = () => !polling && onState && onState(false);
+  setTimeout(() => { if (!live) { es.close(); polling = true; onState && onState(true); poll(); } }, 2500);
+  function poll() {
+    fetch(`/poll?role=${role}&id=${id}&since=${last}`).then((r) => r.json()).then((ms) => ms.forEach(deliver))
+      .catch(() => {}).finally(() => setTimeout(poll, 350));
+  }
+}
+function onState(ok) { $('#state').textContent = ok ? '● online' : '○ reconnecting'; $('#state').classList.toggle('live', ok); }
+function onMsg(m) {
+  if (m.type === 'stats') $('#stats').textContent = `${m.humans} human${m.humans === 1 ? '' : 's'} online · ${m.queue} in queue`;
+  if (m.type === 'question') start(m);
+  if (m.type === 'cancel' && m.qid === qid) { stop(); toast('User stopped generating.'); }
 }
 
 async function post(url, body) {
@@ -229,7 +238,7 @@ function beep() {
 }
 function toast(t) { const s = $('#stats'); const old = s.textContent; s.textContent = t; setTimeout(() => (s.textContent = old), 2500); }
 
-connect();
+connect('model', id, onMsg, onState);
 </script>
 </body>
 </html>
