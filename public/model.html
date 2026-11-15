@@ -215,10 +215,12 @@ const SMART = /\b(therefore|furthermore|moreover|consequently|hence|thus|however
 function smartScore(t) {
   const w = t.trim().split(/\s+/).filter(Boolean);
   const avg = w.reduce((s, x) => s + x.length, 0) / (w.length || 1);
-  let s = Math.min(4, t.length / 40) + Math.min(3, (t.match(SMART) || []).length * 1.5) + (avg > 6 ? 2 : avg > 5 ? 1 : 0) + (/\d/.test(t) && /[.;:]/.test(t) ? .5 : 0);
+  const tt = t.trim();
+  let s = Math.min(4, t.length / 30) + Math.min(3, (t.match(SMART) || []).length * 1.5) + (avg > 6 ? 2 : avg > 5 ? 1 : 0) + (/\d/.test(t) && /[.;:]/.test(t) ? .5 : 0)
+    + (/^[A-Z]/.test(tt) ? .6 : 0) + (/[.!?]$/.test(tt) ? .6 : 0) + Math.min(1.2, (t.match(/,/g) || []).length * .4);
   return Math.min(10, Math.round(s * 10) / 10);
 }
-const VERDICTS = [[1.2, '🥔 Beautifully dumb. Ship it.'], [2.4, '🙂 Acceptably dumb.'], [3.5, '😬 Getting a bit clever…'], [11, '🚨 Way too smart. The AI will reject this.']]; // keep the last cut-off equal to SMART_LIMIT in hub.js
+const VERDICTS = [[0.7, '🥔 Beautifully dumb. Ship it.'], [1.4, '🙂 Acceptably dumb.'], [2, '😬 Getting a bit clever…'], [11, '🚨 Way too smart. The AI will reject this.']]; // keep the last cut-off equal to SMART_LIMIT in hub.js
 function meter() {
   const s = smartScore(out.value);
   $('#needle').style.left = `calc(${s * 10}% - 2px)`;
