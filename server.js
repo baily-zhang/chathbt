@@ -35,14 +35,15 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write(': hello\n\n');
     const close = hub.connect(q.get('id'), q.get('role'), (t) => res.write(t), q.has('stage'));
-    const ping = setInterval(() => res.write(': ping\n\n'), 15000);
-    req.on('close', () => { clearInterval(ping); close(); });
+    const ping = setInterval(() => res.write(': ping\n\n'), 5000);
+    res.on('close', () => { clearInterval(ping); close(); }); // res, not req: req 'close' can fire as soon as a GET has no body left
     return;
   }
   if (url.pathname === '/poll') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    return res.end(JSON.stringify(hub.poll(q.get('id'), q.get('role'), q.get('since'), q.has('stage'))));
+    return res.end(JSON.stringify(hub.poll(q.get('id'), q.get('role'), q.get('since'), q.has('stage'), q.get('boot'))));
   }
+  if (url.pathname === '/debug') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(hub.debug())); }
   if (url.pathname === '/health') { res.writeHead(200); return res.end('ok'); }
   if (req.method === 'POST' && hub.routes[url.pathname]) {
     const out = await hub.routes[url.pathname](await readBody(req));
@@ -50,7 +51,7 @@ http.createServer(async (req, res) => {
     return res.end(JSON.stringify(out));
   }
 
-  const name = { '/': '/index.html', '/model': '/model.html' }[url.pathname] || url.pathname;
+  const name = { '/': '/index.html', '/model': '/model.html', '/qr': '/qr.html' }[url.pathname] || url.pathname;
   const file = path.join(PUBLIC, path.normalize(name).replace(/^(\.\.[/\\])+/, ''));
   if (!file.startsWith(PUBLIC)) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, data) => {

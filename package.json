@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "dev:worker": "npx wrangler dev",
-    "deploy": "npx wrangler deploy --var BUILD:$(date +%s)"
+    "deploy": "npx wrangler deploy --var BUILD:$(date +%s)",
+    "test": "node tests/e2e.mjs http://127.0.0.1:3006"
   },
   "engines": {
     "node": ">=18"

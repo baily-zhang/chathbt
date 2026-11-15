@@ -256,11 +256,11 @@ function connect(role, id, onMsg, onState) {
   es.onerror = () => !polling && onState && onState(false);
   setTimeout(() => { if (!live) { es.close(); polling = true; onState && onState(true); poll(); } }, 2500);
   function poll() {
-    fetch(`/poll?role=${role}&id=${id}&since=${last}`).then((r) => r.json()).then((ms) => ms.forEach(deliver))
+    fetch(`/poll?role=${role}&id=${id}&since=${last}&boot=${boot || ''}`).then((r) => r.json()).then((ms) => ms.forEach(deliver))
       .catch(() => {}).finally(() => setTimeout(poll, 1000));
   }
 }
-post('/reset', {}); // drop questions left behind by a previous load of this page
+const resetDone = post('/reset', {}); // drop questions left behind by a previous load of this page
 connect('asker', uid, handle);
 // Retries briefly: the server restarts for a moment on each deploy.
 async function post(url, body) {
@@ -327,6 +327,7 @@ async function sendMessage() {
   setStatus('Finding a human…');
   refreshSend();
   scrollDown(true);
+  await resetDone; // never let the reset land after (and cancel) our first question
   const r = await post('/ask', { text, model, to: new URLSearchParams(location.search).get('to') }); // /?to=stage: only the presenter's console answers
   if (!pending) { if (r.qid) post('/cancel', { qid: r.qid }); return; } // stopped while sending
   if (!r.qid) return onError("Couldn't reach a human. They might be rebooting. Please try again.");
@@ -364,7 +365,7 @@ function onGlitch(variant) {
   pending = null;
   clearTimeout(p.ladder);
   refreshSend();
-  const after = () => { pending = p; onError('Something went wrong while generating the response. The model pressed a button it should not have.'); };
+  const after = () => { if (pending) return; pending = p; onError('Something went wrong while generating the response. The model pressed a button it should not have.'); }; // user already asked again
   if (variant === 0) screenGlitch(2600, after);
   else if (variant === 1) deadPage(after);
   else screenGlitch(1800, () => deadPage(after));

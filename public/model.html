@@ -157,7 +157,7 @@ function connect(role, id, onMsg, onState) {
   es.onerror = () => !polling && onState && onState(false);
   setTimeout(() => { if (!live) { es.close(); polling = true; onState && onState(true); poll(); } }, 2500);
   function poll() {
-    fetch(`/poll?role=${role}&id=${id}&since=${last}${STAGE ? '&stage' : ''}`).then((r) => r.json()).then((ms) => ms.forEach(deliver))
+    fetch(`/poll?role=${role}&id=${id}&since=${last}&boot=${boot || ''}${STAGE ? '&stage' : ''}`).then((r) => r.json()).then((ms) => ms.forEach(deliver))
       .catch(() => {}).finally(() => setTimeout(poll, 1000));
   }
 }
@@ -230,7 +230,7 @@ async function submit() {
     $('#why').textContent = `IQ check: ${r.score}/10` + (r.reason ? ` · “${r.reason}”` : '');
     $('#nope').classList.add('show');
     buzz();
-  }
+  } else if (qid === q) { stop(); toast('That prompt is gone (the user left or someone faster took it).'); }
 }
 function closeNope() { $('#nope').classList.remove('show'); out.focus(); }
 
@@ -246,7 +246,7 @@ function smartScore(t) {
 }
 const VERDICTS = [[0.7, '🥔 Beautifully dumb. Ship it.'], [1.4, '🙂 Acceptably dumb.'], [2, '😬 Getting a bit clever…'], [11, '🚨 Way too smart. The AI will reject this.']]; // keep the last cut-off equal to SMART_LIMIT in hub.js
 function meter() {
-  const s = smartScore(out.value);
+  const s = smartScore(out.value.trim());
   $('#needle').style.left = `calc(${s * 10}% - 2px)`;
   $('#score').textContent = `${s} / 10`;
   $('#verdict').textContent = out.value.trim() ? VERDICTS.find(([max]) => s < max)[1] : '';
@@ -300,6 +300,7 @@ function offDuty(kind) {
 }
 $('#idleBreak').onclick = takeBreak;
 $('#wake').onclick = async () => { offDuty(null); await post('/wake', {}); };
+post('/wake', {}); // a freshly opened console is on duty
 connect('model', id, onMsg, onState);
 </script>
 </body>

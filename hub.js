@@ -37,7 +37,9 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
   function send(id, msg) {
     const c = clients.get(id);
     if (!c) return;
-    const m = { ...msg, seq: ++c.seq, boot, t: Date.now() };
+    // `boot` changes when the hub restarts OR this client's record was re-created (evicted, then back):
+    // either way seq starts over, so the page must reset its counter.
+    const m = { ...msg, seq: ++c.seq, boot: boot + '.' + c.gen, t: Date.now() };
     c.box.push(m);
     if (c.box.length > 300) c.box.splice(0, c.box.length - 300);
     if (c.write) {
@@ -47,7 +49,7 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
   }
   function join(id, role) {
     let c = clients.get(id);
-    if (!c) { c = { write: null, role, busy: null, asleep: false, box: [], seq: 0, seen: Date.now() }; clients.set(id, c); later(assign); }
+    if (!c) { c = { write: null, role, busy: null, asleep: false, box: [], seq: 0, seen: Date.now(), gen: Math.random().toString(36).slice(2, 6) }; clients.set(id, c); later(assign); }
     c.seen = Date.now();
     return c;
   }
@@ -60,6 +62,9 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
     assign();
   }
   const humans = () => [...clients].filter(([, c]) => c.role === 'model');
+  // Reachable right now: an open stream, or a polling page that checked in within the last 3s.
+  // (A page that just closed stays in `clients` for GONE_MS in case it reconnects; don't hand it prompts.)
+  const reachable = (c) => !!c.write || Date.now() - (c.polled || 0) < 3000;
 
   // Online counts go to everyone, so with hundreds of people they are coalesced to at most once a second.
   let statsTimer = null;
@@ -79,7 +84,7 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
     for (const qid of [...queue]) {
       const q = questions.get(qid);
       if (!q) { queue.splice(queue.indexOf(qid), 1); continue; }
-      const idle = humans().filter(([id, c]) => !c.busy && !c.asleep && !!c.stage === !!q.stage && !q.skip?.has(id));
+      const idle = humans().filter(([id, c]) => reachable(c) && !c.busy && !c.asleep && !!c.stage === !!q.stage && !q.skip?.has(id));
       if (!idle.length) continue;
       queue.splice(queue.indexOf(qid), 1);
       const [mid, m] = idle[Math.floor(Math.random() * idle.length)];
@@ -109,7 +114,7 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
     for (const [id, c] of clients) if (!c.write && now - c.seen > GONE_MS) leave(id);
     for (const q of questions.values()) {
       if (!q.modelId || q.stage || now - q.active < SLOW_MS) continue;
-      const free = humans().some(([id, c]) => id !== q.modelId && !c.busy && !c.asleep && !c.stage && !q.skip?.has(id));
+      const free = humans().some(([id, c]) => id !== q.modelId && reachable(c) && !c.busy && !c.asleep && !c.stage && !q.skip?.has(id));
       if (!free) continue;
       const m = clients.get(q.modelId);
       if (m) { m.busy = null; send(q.modelId, { type: 'cancel', qid: q.qid, reason: 'slow' }); }
@@ -192,7 +197,7 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
       q.active = Date.now();
       if (q.rejects < MAX_REJECTS) {
         const verdict = await judge(q.text, text);
-        if (!questions.has(q.qid)) return { ok: false }; // asker left while we judged
+        if (!mine(b)) return { ok: false }; // asker left, or the prompt moved to someone else while we judged
         if (verdict.tooSmart) {
           q.rejects++;
           send(q.askerId, { type: 'lobotomy', qid: q.qid, attempt: q.rejects });
@@ -248,7 +253,6 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
       const c = join(id, role === 'model' ? 'model' : 'asker');
       c.stage = !!stage;
       c.write = write;
-      c.asleep = false; // a freshly opened page is awake by definition
       // A model page that reloaded mid-prompt gets its prompt back (the page ignores it if already shown).
       const q = c.role === 'model' && c.busy && questions.get(c.busy);
       if (q) send(id, { type: 'question', qid: q.qid, text: q.text, model: q.model });
@@ -256,11 +260,12 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
       return () => { if (c.write === write) { c.write = null; c.seen = Date.now(); } };
     },
     // Polling fallback: everything after `since`.
-    poll(id, role, since, stage) {
+    poll(id, role, since, stage, pageBoot) {
       if (!id) return [];
       const c = join(id, role === 'model' ? 'model' : 'asker');
       c.stage = !!stage;
-      const n = Number(since) || 0;
+      c.polled = Date.now();
+      const n = pageBoot === boot + '.' + c.gen ? Number(since) || 0 : 0; // stale numbering: start over
       // A freshly loaded page (since=0) only wants recent messages, not the whole mailbox history.
       return c.box.filter((m) => m.seq > n && (n > 0 || Date.now() - m.t < 10000));
     },
