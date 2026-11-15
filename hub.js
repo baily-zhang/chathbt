@@ -6,6 +6,7 @@
 const MAX_REJECTS = 2;    // after this many "too smart" rejections we give up and let it through
 const AFK_MS = 25000;     // a human who types nothing on a prompt for this long is considered asleep
 const GONE_MS = 8000;     // a client with no stream that hasn't polled for this long has left
+const SMART_LIMIT = 3.5; // score (0..10) at which an answer counts as too smart. Low on purpose: be dumb.
 
 const SMART_WORDS = /\b(therefore|furthermore|moreover|consequently|hence|thus|however|approximately|specifically|essentially|fundamentally|according to|in conclusion|nevertheless|whereas)\b/gi;
 
@@ -14,7 +15,7 @@ export function heuristicScore(text) {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const avgLen = words.reduce((s, w) => s + w.length, 0) / (words.length || 1);
   let score = 0;
-  score += Math.min(4, text.length / 60);                 // long answers are suspicious
+  score += Math.min(4, text.length / 40);                 // long answers are suspicious
   score += Math.min(3, (text.match(SMART_WORDS) || []).length * 1.5);
   score += avgLen > 6 ? 2 : avgLen > 5 ? 1 : 0;           // big words
   score += /\d/.test(text) && /[.;:]/.test(text) ? 0.5 : 0;
@@ -133,7 +134,7 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
     const ai = await aiScore(question, answer);
     const local = heuristicScore(answer);
     const score = ai ? Math.max(ai.score, local) : local;
-    return { score, reason: ai?.reason || null, by: ai ? 'ai' : 'heuristic', tooSmart: score >= 6 };
+    return { score, reason: ai?.reason || null, by: ai ? 'ai' : 'heuristic', tooSmart: score >= SMART_LIMIT };
   }
 
   // ---------- actions (POST bodies) ----------
