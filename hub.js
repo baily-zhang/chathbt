@@ -4,6 +4,7 @@
 // numbered and kept in a small mailbox so clients behind buffering proxies can poll instead.
 
 const MAX_REJECTS = 2;    // after this many "too smart" rejections we give up and let it through
+const SLOW_MS = 45000;    // a human who types nothing on a prompt for this long loses it to an idle human (if there is one)
 const GONE_MS = 8000;     // a client with no stream that hasn't polled for this long has left
 const SMART_LIMIT = 2; // score (0..10) at which an answer counts as too smart. Low on purpose: be dumb.
 
@@ -76,7 +77,7 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
     for (const qid of [...queue]) {
       const q = questions.get(qid);
       if (!q) { queue.splice(queue.indexOf(qid), 1); continue; }
-      const idle = humans().filter(([, c]) => !c.busy && !c.asleep && !!c.stage === !!q.stage);
+      const idle = humans().filter(([id, c]) => !c.busy && !c.asleep && !!c.stage === !!q.stage && !q.skip?.has(id));
       if (!idle.length) continue;
       queue.splice(queue.indexOf(qid), 1);
       const [mid, m] = idle[Math.floor(Math.random() * idle.length)];
@@ -99,10 +100,22 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
     if (m && m.busy === qid) m.busy = null;
   }
 
-  // Run every ~2s: drop clients that have gone away.
+  // Run every ~2s: drop clients that have gone away, and quietly move prompts away from
+  // humans who walked off (phone in pocket), but only if someone else is free to take it.
   function tick() {
     const now = Date.now();
     for (const [id, c] of clients) if (!c.write && now - c.seen > GONE_MS) leave(id);
+    for (const q of questions.values()) {
+      if (!q.modelId || q.stage || now - q.active < SLOW_MS) continue;
+      const free = humans().some(([id, c]) => id !== q.modelId && !c.busy && !c.asleep && !c.stage && !q.skip?.has(id));
+      if (!free) continue;
+      const m = clients.get(q.modelId);
+      if (m) { m.busy = null; send(q.modelId, { type: 'cancel', qid: q.qid, reason: 'slow' }); }
+      (q.skip ??= new Set()).add(q.modelId);
+      q.modelId = null;
+      queue.unshift(q.qid);
+      assign();
+    }
   }
 
   // ---------- the "too smart" judge ----------

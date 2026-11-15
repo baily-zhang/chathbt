@@ -161,7 +161,7 @@ function onState(ok) { $('#state').textContent = ok ? '● online' : '○ reconn
 function onMsg(m) {
   if (m.type === 'stats') $('#stats').textContent = `${m.humans} human${m.humans === 1 ? '' : 's'} online · ${m.queue} in queue`;
   if (m.type === 'question') start(m);
-  if (m.type === 'cancel' && m.qid === qid) { stop(); toast('User stopped generating.'); }
+  if (m.type === 'cancel' && m.qid === qid) { stop(); toast(m.reason === 'slow' ? 'Too slow — the prompt went to a faster human.' : 'User stopped generating.'); }
 }
 
 // Retries briefly: the server restarts for a moment on each deploy.
