@@ -37,7 +37,7 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
   function send(id, msg) {
     const c = clients.get(id);
     if (!c) return;
-    const m = { ...msg, seq: ++c.seq, boot };
+    const m = { ...msg, seq: ++c.seq, boot, t: Date.now() };
     c.box.push(m);
     if (c.box.length > 300) c.box.splice(0, c.box.length - 300);
     if (c.write) {
@@ -165,6 +165,16 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
       later(assign);
       return { qid };
     },
+    // A chat page just (re)loaded: anything this asker still had in flight belongs to a page that is gone.
+    async '/reset'(b) {
+      for (const q of [...questions.values()]) {
+        if (q.askerId !== b.id) continue;
+        if (q.modelId) send(q.modelId, { type: 'cancel', qid: q.qid });
+        finish(q.qid);
+      }
+      assign();
+      return { ok: true };
+    },
     async '/wake'(b) {
       const c = clients.get(b.id);
       if (c) { c.asleep = false; assign(); }
@@ -239,6 +249,9 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
       c.stage = !!stage;
       c.write = write;
       c.asleep = false; // a freshly opened page is awake by definition
+      // A model page that reloaded mid-prompt gets its prompt back (the page ignores it if already shown).
+      const q = c.role === 'model' && c.busy && questions.get(c.busy);
+      if (q) send(id, { type: 'question', qid: q.qid, text: q.text, model: q.model });
       assign();
       return () => { if (c.write === write) { c.write = null; c.seen = Date.now(); } };
     },
@@ -247,7 +260,9 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
       if (!id) return [];
       const c = join(id, role === 'model' ? 'model' : 'asker');
       c.stage = !!stage;
-      return c.box.filter((m) => m.seq > (Number(since) || 0));
+      const n = Number(since) || 0;
+      // A freshly loaded page (since=0) only wants recent messages, not the whole mailbox history.
+      return c.box.filter((m) => m.seq > n && (n > 0 || Date.now() - m.t < 10000));
     },
   };
 }

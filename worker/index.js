@@ -3,7 +3,7 @@
 // Durable Object, so all humans and askers share the same in-memory hub (hub.js).
 import { createHub } from '../hub.js';
 
-const API = new Set(['/events', '/poll', '/health', '/ask', '/draft', '/answer', '/break', '/wake', '/glitch', '/cancel', '/debug']);
+const API = new Set(['/events', '/poll', '/health', '/ask', '/draft', '/answer', '/break', '/wake', '/glitch', '/cancel', '/debug', '/reset']);
 
 export default {
   async fetch(request, env) {

@@ -260,6 +260,7 @@ function connect(role, id, onMsg, onState) {
       .catch(() => {}).finally(() => setTimeout(poll, 1000));
   }
 }
+post('/reset', {}); // drop questions left behind by a previous load of this page
 connect('asker', uid, handle);
 // Retries briefly: the server restarts for a moment on each deploy.
 async function post(url, body) {
