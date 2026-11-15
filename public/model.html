@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HBT Model Console</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<style>
+:root{--bg:#0f0f10;--card:#1a1a1c;--line:#2c2c30;--text:#ececec;--muted:#9a9aa0;--acc:#10a37f;--warn:#e8710a}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:ui-sans-serif,-apple-system,system-ui,"Segoe UI",Arial,sans-serif;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line)}
+header h1{font-size:16px;font-weight:600;margin:0}
+.pill{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+.pill.live{color:var(--acc);border-color:#10a37f55}
+.spacer{flex:1}
+main{flex:1;width:100%;max-width:760px;margin:0 auto;padding:24px 20px;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+.label{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between}
+#idle{text-align:center;padding:60px 20px;color:var(--muted)}
+#idle .big{font-size:44px;margin-bottom:12px}
+#q{font-size:22px;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+#hint{font-size:13px;color:var(--warn);margin-top:10px}
+textarea{width:100%;min-height:180px;resize:vertical;background:#111113;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:14px;font:inherit;font-size:17px;line-height:1.5;outline:none}
+textarea:focus{border-color:#10a37f88}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button{font:inherit;font-size:15px;border-radius:999px;padding:10px 18px;border:1px solid var(--line);background:#222226;color:var(--text);cursor:pointer}
+button:hover{background:#2a2a2f}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button.primary:hover{filter:brightness(1.1)}
+.kbd{font-size:12px;color:var(--muted)}
+#timer{font-variant-numeric:tabular-nums}
+.rules{font-size:13px;color:var(--muted);line-height:1.7}
+.rules b{color:var(--text);font-weight:500}
+#work{display:none}
+body.busy #work{display:flex;flex-direction:column;gap:16px}
+body.busy #idle{display:none}
+.meter{margin-top:14px}
+.meter .bar{height:10px;border-radius:999px;background:linear-gradient(90deg,#10a37f,#e8c20a 55%,#e8410a);position:relative}
+.meter .needle{position:absolute;top:-5px;width:4px;height:20px;border-radius:2px;background:#fff;box-shadow:0 0 0 2px #0f0f10;transition:left .25s}
+.meter .lbls{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:6px}
+#verdict{font-size:14px;margin-top:6px;min-height:20px}
+#nope{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:9;padding:20px}
+#nope.show{display:flex}
+#nope .box{background:#1f1214;border:2px solid #e8410a;border-radius:20px;padding:28px 32px;max-width:460px;text-align:center;animation:shake .5s}
+#nope h2{margin:0 0 8px;font-size:28px;color:#ff6a3d}
+#nope p{margin:6px 0;color:var(--text);font-size:16px}
+#nope .why{color:var(--muted);font-size:14px}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-10px) rotate(-2deg)}40%,80%{transform:translateX(10px) rotate(2deg)}}
+@keyframes flash{0%{background:#10a37f33}100%{background:var(--card)}}
+.flash{animation:flash 1.2s ease-out}
+</style>
+</head>
+<body>
+<header>
+  <img src="/logo.svg" width="28" height="28" alt="" style="border-radius:7px">
+  <h1>HBT Model Console</h1>
+  <span class="pill" id="me">model #—</span>
+  <span class="pill live" id="state">● online</span>
+  <span class="spacer"></span>
+  <span class="pill" id="stats">0 models · 0 in queue</span>
+</header>
+
+<main>
+  <div class="card" id="idle">
+    <div class="big">🧠</div>
+    <div style="font-size:18px;color:var(--text);margin-bottom:6px">You are now a large language model.</div>
+    <div>Waiting for a user prompt… keep this tab open.</div>
+  </div>
+
+  <div id="work">
+    <div class="card" id="qcard">
+      <div class="label"><span>User prompt</span><span>context window: 1 message · <span id="timer">0s</span></span></div>
+      <div id="q"></div>
+      <div id="hint"></div>
+    </div>
+    <div class="card">
+      <div class="label"><span>Your output (the user can see you typing — and deleting)</span></div>
+      <textarea id="out" placeholder="Answer with total confidence. You are an AI."></textarea>
+      <div class="meter">
+        <div class="label" style="margin-bottom:6px"><span>Dumbness meter</span><span id="score">0 / 10</span></div>
+        <div class="bar"><div class="needle" id="needle" style="left:0%"></div></div>
+        <div class="lbls"><span>🥔 perfectly dumb</span><span>🤓 too smart</span></div>
+        <div id="verdict"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="submit">Generate ↵</button>
+        <button id="bathroom">☕ Take a break</button>
+        <button id="prefix">+ “Great question!”</button>
+        <button id="aslm">+ “As a large language model…”</button>
+        <span class="spacer"></span>
+        <span class="kbd">⌘/Ctrl + Enter to send</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card rules">
+    <b>Model guidelines.</b> Never say “I don't know”. Sound sure. If unsure, add a statistic. <b>Do not be smart.</b> A real AI checks every answer and will reject anything intelligent.
+    <b>HBT-5 Thinking</b> users paid extra — pretend to think (type, delete, retype).
+    <b>HBT-mini</b> users get the intern energy. You only remember the latest message.
+  </div>
+</main>
+<div id="nope"><div class="box">
+  <h2>ohohoh wait 🛑</h2>
+  <p><b>Too smart.</b> plz be dumb.</p>
+  <p class="why" id="why"></p>
+  <button class="primary" onclick="closeNope()" style="margin-top:14px">ok I'll be dumber</button>
+</div></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const id = sessionStorage.hbtModelId || (sessionStorage.hbtModelId = 'm' + Math.random().toString(36).slice(2, 10));
+$('#me').textContent = 'model #' + (parseInt(id.slice(1, 5), 36) % 900 + 100);
+const out = $('#out');
+let qid = null, started = 0, tick = null, sendT = null, lastSent = null;
+
+const HINTS = {
+  'HBT-5': 'User picked HBT-5: answer fast, think never.',
+  'HBT-5 Thinking': 'User picked HBT-5 Thinking: pretend to think. Type, delete, retype. They can see it.',
+  'HBT-mini': 'User picked HBT-mini: you are an intern. Hedge everything.',
+};
+
+function connect() {
+  const es = new EventSource('/events?role=model&id=' + id);
+  es.onopen = () => { $('#state').textContent = '● online'; $('#state').classList.add('live'); };
+  es.onerror = () => { $('#state').textContent = '○ reconnecting'; $('#state').classList.remove('live'); };
+  es.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'stats') $('#stats').textContent = `${m.humans} human${m.humans === 1 ? '' : 's'} online · ${m.queue} in queue`;
+    if (m.type === 'question') start(m);
+    if (m.type === 'cancel' && m.qid === qid) { stop(); toast('User stopped generating.'); }
+  };
+}
+
+async function post(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) });
+  return r.json();
+}
+
+function start(m) {
+  qid = m.qid;
+  $('#q').textContent = m.text;
+  $('#hint').textContent = HINTS[m.model] || '';
+  out.value = ''; lastSent = null; meter();
+  document.body.classList.add('busy');
+  $('#qcard').classList.remove('flash'); void $('#qcard').offsetWidth; $('#qcard').classList.add('flash');
+  started = Date.now();
+  clearInterval(tick);
+  tick = setInterval(() => { $('#timer').textContent = Math.round((Date.now() - started) / 1000) + 's'; }, 500);
+  out.focus();
+  beep();
+  document.title = '🔔 New prompt — HBT';
+}
+function stop() {
+  qid = null;
+  closeNope();
+  clearInterval(tick); clearTimeout(sendT);
+  document.body.classList.remove('busy');
+  document.title = 'HBT Model Console';
+}
+
+// stream drafts to the user (throttled)
+out.addEventListener('input', () => {
+  meter();
+  if (!qid || sendT) return;
+  sendT = setTimeout(() => {
+    sendT = null;
+    if (qid && out.value !== lastSent) { lastSent = out.value; post('/draft', { qid, text: out.value }); }
+  }, 90);
+});
+out.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } });
+$('#submit').onclick = submit;
+let judging = false;
+async function submit() {
+  const text = out.value.trim();
+  if (!qid || !text || judging) return;
+  judging = true;
+  $('#submit').textContent = 'Checking IQ…';
+  const q = qid;
+  const r = await post('/answer', { qid: q, text }).catch(() => ({}));
+  judging = false;
+  $('#submit').textContent = 'Generate ↵';
+  if (r.ok) return stop();
+  if (r.tooSmart && qid === q) {
+    $('#why').textContent = `IQ check: ${r.score}/10` + (r.reason ? ` · “${r.reason}”` : '');
+    $('#nope').classList.add('show');
+    buzz();
+  }
+}
+function closeNope() { $('#nope').classList.remove('show'); out.focus(); }
+
+// Same rules as the server's heuristic, so the needle moves while you type.
+const SMART = /\b(therefore|furthermore|moreover|consequently|hence|thus|however|approximately|specifically|essentially|fundamentally|according to|in conclusion|nevertheless|whereas)\b/gi;
+function smartScore(t) {
+  const w = t.trim().split(/\s+/).filter(Boolean);
+  const avg = w.reduce((s, x) => s + x.length, 0) / (w.length || 1);
+  let s = Math.min(4, t.length / 60) + Math.min(3, (t.match(SMART) || []).length * 1.5) + (avg > 6 ? 2 : avg > 5 ? 1 : 0) + (/\d/.test(t) && /[.;:]/.test(t) ? .5 : 0);
+  return Math.min(10, Math.round(s * 10) / 10);
+}
+const VERDICTS = [[2, '🥔 Beautifully dumb. Ship it.'], [4, '🙂 Acceptably dumb.'], [6, '😬 Getting a bit clever…'], [11, '🚨 Way too smart. The AI will reject this.']];
+function meter() {
+  const s = smartScore(out.value);
+  $('#needle').style.left = `calc(${s * 10}% - 2px)`;
+  $('#score').textContent = `${s} / 10`;
+  $('#verdict').textContent = out.value.trim() ? VERDICTS.find(([max]) => s < max)[1] : '';
+}
+function buzz() {
+  try {
+    const a = new AudioContext(), o = a.createOscillator(), g = a.createGain();
+    o.type = 'sawtooth'; o.frequency.value = 140; g.gain.setValueAtTime(.12, a.currentTime); g.gain.exponentialRampToValueAtTime(.001, a.currentTime + .5);
+    o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + .5);
+  } catch {}
+  navigator.vibrate && navigator.vibrate([80, 40, 80]);
+}
+$('#bathroom').onclick = async () => { if (!qid) return; const q = qid; stop(); await post('/break', { qid: q }); };
+function insert(t, atStart) {
+  out.value = atStart ? t + out.value : out.value + t;
+  out.dispatchEvent(new Event('input')); out.focus();
+}
+$('#prefix').onclick = () => insert('Great question! ', true);
+$('#aslm').onclick = () => insert('As a large language model, ', true);
+
+function beep() {
+  try {
+    const a = new AudioContext(), o = a.createOscillator(), g = a.createGain();
+    o.frequency.value = 880; g.gain.setValueAtTime(.15, a.currentTime); g.gain.exponentialRampToValueAtTime(.001, a.currentTime + .35);
+    o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + .35);
+  } catch {}
+}
+function toast(t) { const s = $('#stats'); const old = s.textContent; s.textContent = t; setTimeout(() => (s.textContent = old), 2500); }
+
+connect();
+</script>
+</body>
+</html>
