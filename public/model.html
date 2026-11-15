@@ -28,6 +28,11 @@ button{font:inherit;font-size:15px;border-radius:999px;padding:10px 18px;border:
 button:hover{background:#2a2a2f}
 button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
 button.primary:hover{filter:brightness(1.1)}
+.quick{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.quick button{font-size:14px;padding:7px 14px}
+.quick .lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);align-self:center;margin-right:2px}
+button.danger{background:#3a1416;border-color:#e8410a;color:#ffb39c}
+button.danger:hover{background:#4a1a1c}
 .kbd{font-size:12px;color:var(--muted)}
 #timer{font-variant-numeric:tabular-nums}
 .rules{font-size:13px;color:var(--muted);line-height:1.7}
@@ -94,11 +99,13 @@ body.asleep #idle{display:none}
         <div class="lbls"><span>🥔 perfectly dumb</span><span>🤓 too smart</span></div>
         <div id="verdict"></div>
       </div>
+      <div class="quick" id="quick"><span class="lbl">One-click answers</span></div>
       <div class="row" style="margin-top:12px">
         <button class="primary" id="submit">Generate ↵</button>
         <button id="bathroom">☕ Take a break</button>
         <button id="prefix">+ “Great question!”</button>
         <button id="aslm">+ “As a large language model…”</button>
+        <button class="danger" id="glitch" title="Refuse to answer and crash their app">🐛 Crash their app</button>
         <span class="spacer"></span>
         <span class="kbd">⌘/Ctrl + Enter to send</span>
       </div>
@@ -153,12 +160,20 @@ function onMsg(m) {
   if (m.type === 'asleep' && m.qid === qid) { stop(); offDuty('asleep'); }
 }
 
+// Retries briefly: the server restarts for a moment on each deploy.
 async function post(url, body) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) });
-  return r.json();
+  for (let i = 0; i < 4; i++) {
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, ...body }) });
+      if (r.ok) return await r.json();
+    } catch {}
+    await new Promise((res) => setTimeout(res, 400 * (i + 1)));
+  }
+  return { error: 'unreachable' };
 }
 
 function start(m) {
+  offDuty(null); // a new prompt wakes you up
   qid = m.qid;
   $('#q').textContent = m.text;
   $('#hint').textContent = HINTS[m.model] || '';
@@ -241,6 +256,16 @@ function insert(t, atStart) {
   out.value = atStart ? t + out.value : out.value + t;
   out.dispatchEvent(new Event('input')); out.focus();
 }
+// One-click dumb answers (all short and lowercase, so they always pass the judge).
+const QUICK = ['idk lol', 'yes', 'no', 'probably the moon', 'ask ur mom', '42', 'depends on the vibes', 'trust me bro', 'google it'];
+for (const t of QUICK) {
+  const b = document.createElement('button');
+  b.textContent = t;
+  b.onclick = () => { if (!qid) return; out.value = t; out.dispatchEvent(new Event('input')); submit(); };
+  $('#quick').appendChild(b);
+}
+// Don't answer: make the asker's app glitch out instead.
+$('#glitch').onclick = async () => { if (!qid) return; const q = qid; stop(); toast('💥 Their app is now broken.'); await post('/glitch', { qid: q }); };
 $('#prefix').onclick = () => insert('Great question! ', true);
 $('#aslm').onclick = () => insert('As a large language model, ', true);
 
@@ -255,7 +280,7 @@ function toast(t) { const s = $('#stats'); const old = s.textContent; s.textCont
 
 // Off duty (on break, or fell asleep on a prompt): no prompts until the human clocks back in.
 const OFF = {
-  asleep: ['😴', 'You fell asleep. The prompt went to another human.', 'Your GPU has been downclocked.', "I'm awake, give me prompts", '😴 You fell asleep — HBT'],
+  asleep: ['😴', 'You fell asleep. The prompt went to another human.', 'Your GPU has been downclocked. The next prompt will still find you.', "I'm awake", '😴 You fell asleep — HBT'],
   break: ['☕', 'You are on break.', 'No prompts will reach you. Users are being told the model is unionized.', 'Back to work', '☕ On break — HBT'],
 };
 function offDuty(kind) {

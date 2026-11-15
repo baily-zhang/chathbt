@@ -6,8 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev:worker": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "dev:worker": "npx wrangler dev",
+    "deploy": "npx wrangler deploy --var BUILD:$(date +%s)"
   },
   "engines": {
     "node": ">=18"

@@ -4,7 +4,7 @@
 // numbered and kept in a small mailbox so clients behind buffering proxies can poll instead.
 
 const MAX_REJECTS = 2;    // after this many "too smart" rejections we give up and let it through
-const AFK_MS = 25000;     // a human who types nothing on a prompt for this long is considered asleep
+const AFK_MS = 60000;     // a human who types nothing on a prompt for this long is considered asleep
 const GONE_MS = 8000;     // a client with no stream that hasn't polled for this long has left
 const SMART_LIMIT = 2; // score (0..10) at which an answer counts as too smart. Low on purpose: be dumb.
 
@@ -99,7 +99,8 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
     for (const q of questions.values()) {
       if (!q.modelId || now - q.active < AFK_MS) continue;
       const m = clients.get(q.modelId);
-      if (m) { m.busy = null; m.asleep = true; send(q.modelId, { type: 'asleep', qid: q.qid }); }
+      // Only this prompt moves on; the human stays available (an explicit break is what stops prompts).
+      if (m) { m.busy = null; send(q.modelId, { type: 'asleep', qid: q.qid }); }
       q.modelId = null;
       queue.unshift(q.qid);
       send(q.askerId, { type: 'asleep', qid: q.qid });
@@ -144,7 +145,8 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
   const routes = {
     async '/ask'(b) {
       const text = String(b.text || '').trim().slice(0, 2000);
-      if (!clients.has(b.id) || !text) return { error: 'bad request' };
+      if (!b.id || !text) return { error: 'bad request' };
+      if (!clients.has(b.id)) join(b.id, 'asker'); // e.g. the server just restarted and the stream hasn't reconnected yet
       const qid = String(qSeq++);
       questions.set(qid, { qid, askerId: b.id, text, model: String(b.model || 'HBT-5'), modelId: null, rejects: 0 });
       queue.push(qid);
@@ -186,6 +188,12 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
       const q = mine(b);
       if (q) { send(q.askerId, { type: 'break', qid: q.qid }); finish(q.qid); }
       assign();
+      return { ok: true };
+    },
+    // The human refuses to answer and crashes the asker's app instead (a fake bug).
+    async '/glitch'(b) {
+      const q = mine(b);
+      if (q) { send(q.askerId, { type: 'glitch', qid: q.qid, variant: Math.floor(Math.random() * 3) }); finish(q.qid); assign(); }
       return { ok: true };
     },
     async '/cancel'(b) {
