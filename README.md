@@ -23,6 +23,13 @@ Built at Stupid Ideas Hackathon Ottawa · Track: Stupidest AI
 - Every keystroke of the human is streamed to the asker and diffed into a "thinking" trace with strikethrough deletions.
 - The judge: a local heuristic, plus a real LLM when `ANTHROPIC_API_KEY` is set. Answers scoring 6/10 or higher are rejected as too smart.
 
+## Live demo setup
+
+- Presenter's console: `/model?stage` (only takes stage questions, never times out).
+- Stage chat on the big screen: `/?to=stage` (questions only go to the stage console).
+- Audience: show `/qr?for=model` so people scan in as models; they answer each other, never the stage.
+- `/?fresh` wipes this browser's chat history before recording. `/debug` shows who is connected.
+
 ## Run
 
 ```bash

@@ -65,6 +65,7 @@ body.asleep #idle{display:none}
   <img src="/logo.svg" width="28" height="28" alt="" style="border-radius:7px">
   <h1>HBT Model Console</h1>
   <span class="pill" id="me">model #—</span>
+  <span class="pill" id="stagePill" style="display:none;color:#ffd166;border-color:#ffd16677">🎤 STAGE · only stage questions</span>
   <span class="pill live" id="state">● online</span>
   <span class="spacer"></span>
   <a class="pill" href="/qr" target="_blank" style="text-decoration:none">📱 QR</a>
@@ -128,6 +129,9 @@ body.asleep #idle{display:none}
 
 <script>
 const $ = (s) => document.querySelector(s);
+// /model?stage: the presenter's console. It only gets questions asked from /?to=stage.
+const STAGE = new URLSearchParams(location.search).has('stage');
+if (STAGE) document.getElementById('stagePill').style.display = '';
 const id = sessionStorage.hbtModelId || (sessionStorage.hbtModelId = 'm' + Math.random().toString(36).slice(2, 10));
 $('#me').textContent = 'model #' + (parseInt(id.slice(1, 5), 36) % 900 + 100);
 const out = $('#out');
@@ -143,13 +147,13 @@ const HINTS = {
 function connect(role, id, onMsg, onState) {
   let last = 0, live = false, polling = false;
   const deliver = (m) => { if (m.seq <= last) return; last = m.seq; live = true; onMsg(m); };
-  const es = new EventSource(`/events?role=${role}&id=${id}`);
+  const es = new EventSource(`/events?role=${role}&id=${id}${STAGE ? '&stage' : ''}`);
   es.onmessage = (e) => deliver(JSON.parse(e.data));
   es.onopen = () => onState && onState(true);
   es.onerror = () => !polling && onState && onState(false);
   setTimeout(() => { if (!live) { es.close(); polling = true; onState && onState(true); poll(); } }, 2500);
   function poll() {
-    fetch(`/poll?role=${role}&id=${id}&since=${last}`).then((r) => r.json()).then((ms) => ms.forEach(deliver))
+    fetch(`/poll?role=${role}&id=${id}&since=${last}${STAGE ? '&stage' : ''}`).then((r) => r.json()).then((ms) => ms.forEach(deliver))
       .catch(() => {}).finally(() => setTimeout(poll, 1000));
   }
 }
@@ -158,7 +162,6 @@ function onMsg(m) {
   if (m.type === 'stats') $('#stats').textContent = `${m.humans} human${m.humans === 1 ? '' : 's'} online · ${m.queue} in queue`;
   if (m.type === 'question') start(m);
   if (m.type === 'cancel' && m.qid === qid) { stop(); toast('User stopped generating.'); }
-  if (m.type === 'asleep' && m.qid === qid) { stop(); offDuty('asleep'); }
 }
 
 // Retries briefly: the server restarts for a moment on each deploy.
@@ -279,9 +282,8 @@ function beep() {
 }
 function toast(t) { const s = $('#stats'); const old = s.textContent; s.textContent = t; setTimeout(() => (s.textContent = old), 2500); }
 
-// Off duty (on break, or fell asleep on a prompt): no prompts until the human clocks back in.
+// On break: no prompts until the human clocks back in.
 const OFF = {
-  asleep: ['😴', 'You fell asleep. The prompt went to another human.', 'Your GPU has been downclocked. The next prompt will still find you.', "I'm awake", '😴 You fell asleep — HBT'],
   break: ['☕', 'You are on break.', 'No prompts will reach you. Users are being told the model is unionized.', 'Back to work', '☕ On break — HBT'],
 };
 function offDuty(kind) {
@@ -290,7 +292,6 @@ function offDuty(kind) {
   const [icon, title, sub, btn, tab] = OFF[kind];
   $('#zIcon').textContent = icon; $('#zTitle').textContent = title; $('#zSub').textContent = sub; $('#wake').textContent = btn;
   document.title = tab;
-  if (kind === 'asleep') buzz();
 }
 $('#idleBreak').onclick = takeBreak;
 $('#wake').onclick = async () => { offDuty(null); await post('/wake', {}); };

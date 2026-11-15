@@ -47,13 +47,13 @@ export class Hub {
       let ping;
       const write = (t) => { writer.write(enc.encode(t)).catch(() => { clearInterval(ping); close(); }); };
       write(': hello\n\n');
-      close = this.hub.connect(q.get('id'), q.get('role'), write);
+      close = this.hub.connect(q.get('id'), q.get('role'), write, q.has('stage'));
       ping = setInterval(() => write(': ping\n\n'), 15000);
       request.signal?.addEventListener('abort', () => { clearInterval(ping); close(); });
       return new Response(readable, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform' } });
     }
     if (url.pathname === '/debug') return json(this.hub.debug());
-    if (url.pathname === '/poll') return json(this.hub.poll(q.get('id'), q.get('role'), q.get('since')));
+    if (url.pathname === '/poll') return json(this.hub.poll(q.get('id'), q.get('role'), q.get('since'), q.has('stage')));
     if (url.pathname === '/health') return new Response(`ok limit=${this.hub.smartLimit} build=${this.build}`);
     const route = this.hub.routes[url.pathname];
     if (request.method === 'POST' && route) {

@@ -4,7 +4,6 @@
 // numbered and kept in a small mailbox so clients behind buffering proxies can poll instead.
 
 const MAX_REJECTS = 2;    // after this many "too smart" rejections we give up and let it through
-const AFK_MS = 60000;     // a human who types nothing on a prompt for this long is considered asleep
 const GONE_MS = 8000;     // a client with no stream that hasn't polled for this long has left
 const SMART_LIMIT = 2; // score (0..10) at which an answer counts as too smart. Low on purpose: be dumb.
 
@@ -70,13 +69,16 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
     }, 1000);
   }
 
-  // Hand queued questions to random idle humans.
+  // Hand queued questions to random idle humans, in queue order.
+  // Stage questions (asked from /?to=stage) only go to stage models (/model?stage), and
+  // stage models only take stage questions, so the audience can't steal the live demo.
   function assign() {
-    while (queue.length) {
-      const idle = humans().filter(([, c]) => !c.busy && !c.asleep);
-      if (!idle.length) break;
-      const q = questions.get(queue.shift());
-      if (!q) continue;
+    for (const qid of [...queue]) {
+      const q = questions.get(qid);
+      if (!q) { queue.splice(queue.indexOf(qid), 1); continue; }
+      const idle = humans().filter(([, c]) => !c.busy && !c.asleep && !!c.stage === !!q.stage);
+      if (!idle.length) continue;
+      queue.splice(queue.indexOf(qid), 1);
       const [mid, m] = idle[Math.floor(Math.random() * idle.length)];
       m.busy = q.qid;
       q.modelId = mid;
@@ -97,20 +99,10 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
     if (m && m.busy === qid) m.busy = null;
   }
 
-  // Run every ~2s: drop vanished clients, and take prompts away from humans who fell asleep.
+  // Run every ~2s: drop clients that have gone away.
   function tick() {
     const now = Date.now();
     for (const [id, c] of clients) if (!c.write && now - c.seen > GONE_MS) leave(id);
-    for (const q of questions.values()) {
-      if (!q.modelId || now - q.active < AFK_MS) continue;
-      const m = clients.get(q.modelId);
-      // Only this prompt moves on; the human stays available (an explicit break is what stops prompts).
-      if (m) { m.busy = null; send(q.modelId, { type: 'asleep', qid: q.qid }); }
-      q.modelId = null;
-      queue.unshift(q.qid);
-      send(q.askerId, { type: 'asleep', qid: q.qid });
-      assign();
-    }
   }
 
   // ---------- the "too smart" judge ----------
@@ -153,7 +145,7 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
       if (!b.id || !text) return { error: 'bad request' };
       if (!clients.has(b.id)) join(b.id, 'asker'); // e.g. the server just restarted and the stream hasn't reconnected yet
       const qid = String(qSeq++);
-      questions.set(qid, { qid, askerId: b.id, text, model: String(b.model || 'HBT-5'), modelId: null, rejects: 0 });
+      questions.set(qid, { qid, askerId: b.id, text, model: String(b.model || 'HBT-5'), modelId: null, rejects: 0, stage: b.to === 'stage' });
       queue.push(qid);
       later(assign);
       return { qid };
@@ -222,22 +214,24 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
       return {
         queue: queue.length,
         questions: [...questions.values()].map((q) => ({ qid: q.qid, asker: q.askerId.slice(0, 4), model: q.modelId && q.modelId.slice(0, 4), idle_s: q.active ? Math.round((now - q.active) / 1000) : null })),
-        clients: [...clients].map(([id, c]) => ({ id: id.slice(0, 4), role: c.role, console: c.role === 'model' ? '#' + (parseInt(id.slice(1, 5), 36) % 900 + 100) : undefined, stream: !!c.write, busy: c.busy, asleep: c.asleep, seen_s: Math.round((now - c.seen) / 1000) })),
+        clients: [...clients].map(([id, c]) => ({ id: id.slice(0, 4), role: c.role, console: c.role === 'model' ? '#' + (parseInt(id.slice(1, 5), 36) % 900 + 100) : undefined, stage: !!c.stage, stream: !!c.write, busy: c.busy, asleep: c.asleep, seen_s: Math.round((now - c.seen) / 1000) })),
       };
     },
     judgeLabel: apiKey ? `AI (${judgeModel})` : 'heuristic only (set ANTHROPIC_API_KEY for AI)',
     // A live stream opened. Returns a function to call when it closes.
-    connect(id, role, write) {
+    connect(id, role, write, stage) {
       const c = join(id, role === 'model' ? 'model' : 'asker');
+      c.stage = !!stage;
       c.write = write;
       c.asleep = false; // a freshly opened page is awake by definition
       assign();
       return () => { if (c.write === write) { c.write = null; c.seen = Date.now(); } };
     },
     // Polling fallback: everything after `since`.
-    poll(id, role, since) {
+    poll(id, role, since, stage) {
       if (!id) return [];
       const c = join(id, role === 'model' ? 'model' : 'asker');
+      c.stage = !!stage;
       return c.box.filter((m) => m.seq > (Number(since) || 0));
     },
   };

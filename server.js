@@ -34,14 +34,14 @@ http.createServer(async (req, res) => {
     if (!q.get('id')) { res.writeHead(400); return res.end(); }
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write(': hello\n\n');
-    const close = hub.connect(q.get('id'), q.get('role'), (t) => res.write(t));
+    const close = hub.connect(q.get('id'), q.get('role'), (t) => res.write(t), q.has('stage'));
     const ping = setInterval(() => res.write(': ping\n\n'), 15000);
     req.on('close', () => { clearInterval(ping); close(); });
     return;
   }
   if (url.pathname === '/poll') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    return res.end(JSON.stringify(hub.poll(q.get('id'), q.get('role'), q.get('since'))));
+    return res.end(JSON.stringify(hub.poll(q.get('id'), q.get('role'), q.get('since'), q.has('stage'))));
   }
   if (url.pathname === '/health') { res.writeHead(200); return res.end('ok'); }
   if (req.method === 'POST' && hub.routes[url.pathname]) {

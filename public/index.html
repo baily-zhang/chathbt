@@ -281,7 +281,6 @@ function handle(m) {
   if (m.type === 'break') onError("The model is on break. Per its union contract, breaks last 15 minutes. Please try again later.");
   if (m.type === 'lobotomy') onLobotomy(m.attempt);
   if (m.type === 'glitch') onGlitch(m.variant);
-  if (m.type === 'asleep') { pending.matched = false; setStatus('Model fell asleep 😴 Waking up another human…'); clearTimeout(pending.ladder); waitLadder(pending); }
 }
 
 // ---------- sending ----------
@@ -318,7 +317,7 @@ async function sendMessage() {
   setStatus('Finding a human…');
   refreshSend();
   scrollDown(true);
-  const r = await post('/ask', { text, model });
+  const r = await post('/ask', { text, model, to: new URLSearchParams(location.search).get('to') }); // /?to=stage: only the presenter's console answers
   if (!pending) { if (r.qid) post('/cancel', { qid: r.qid }); return; } // stopped while sending
   if (!r.qid) return onError("Couldn't reach a human. They might be rebooting. Please try again.");
   pending.qid = r.qid;
