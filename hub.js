@@ -216,6 +216,15 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
     routes,
     tick,
     smartLimit: SMART_LIMIT,
+    // Read-only snapshot for /debug: who is connected and in what state.
+    debug() {
+      const now = Date.now();
+      return {
+        queue: queue.length,
+        questions: [...questions.values()].map((q) => ({ qid: q.qid, asker: q.askerId.slice(0, 4), model: q.modelId && q.modelId.slice(0, 4), idle_s: q.active ? Math.round((now - q.active) / 1000) : null })),
+        clients: [...clients].map(([id, c]) => ({ id: id.slice(0, 4), role: c.role, console: c.role === 'model' ? '#' + (parseInt(id.slice(1, 5), 36) % 900 + 100) : undefined, stream: !!c.write, busy: c.busy, asleep: c.asleep, seen_s: Math.round((now - c.seen) / 1000) })),
+      };
+    },
     judgeLabel: apiKey ? `AI (${judgeModel})` : 'heuristic only (set ANTHROPIC_API_KEY for AI)',
     // A live stream opened. Returns a function to call when it closes.
     connect(id, role, write) {

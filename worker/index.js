@@ -3,7 +3,7 @@
 // Durable Object, so all humans and askers share the same in-memory hub (hub.js).
 import { createHub } from '../hub.js';
 
-const API = new Set(['/events', '/poll', '/health', '/ask', '/draft', '/answer', '/break', '/wake', '/glitch', '/cancel']);
+const API = new Set(['/events', '/poll', '/health', '/ask', '/draft', '/answer', '/break', '/wake', '/glitch', '/cancel', '/debug']);
 
 export default {
   async fetch(request, env) {
@@ -52,6 +52,7 @@ export class Hub {
       request.signal?.addEventListener('abort', () => { clearInterval(ping); close(); });
       return new Response(readable, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform' } });
     }
+    if (url.pathname === '/debug') return json(this.hub.debug());
     if (url.pathname === '/poll') return json(this.hub.poll(q.get('id'), q.get('role'), q.get('since')));
     if (url.pathname === '/health') return new Response(`ok limit=${this.hub.smartLimit} build=${this.build}`);
     const route = this.hub.routes[url.pathname];
