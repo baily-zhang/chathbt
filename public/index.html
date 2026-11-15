@@ -129,8 +129,11 @@ body.glitching #side{animation:jit .17s steps(2) infinite reverse;filter:invert(
 #dead .btns .go{background:var(--send);color:var(--sendfg);border-color:var(--send)}
 #dead details{margin-top:16px;font-size:13px;color:var(--faint)}
 
+#scrim{display:none}
 @media (max-width:760px){
   #side{position:absolute;z-index:20;height:100%;box-shadow:4px 0 24px rgba(0,0,0,.2)}
+  /* phone: the open sidebar covers the chat; tapping the dimmed area closes it */
+  body:not(.collapsed) #scrim{display:block;position:fixed;inset:0;background:#0007;z-index:15}
   #thread{padding:12px 16px 40px}
   .share span{display:none}
 }
@@ -167,6 +170,7 @@ body.glitching #side{animation:jit .17s steps(2) infinite reverse;filter:invert(
   </div>
 </aside>
 
+<div id="scrim" onclick="closeSideOnPhone()"></div>
 <main id="main">
   <header>
     <button class="iconbtn" id="openSide" title="Open sidebar" onclick="document.body.classList.remove('collapsed')">
@@ -580,11 +584,14 @@ function renderList() {
     const b = document.createElement('button');
     b.className = 'chatitem' + (c === cur ? ' active' : '');
     b.textContent = c.title;
-    b.onclick = () => { if (pending) stopPending(); cur = c; renderChat(); renderList(); };
+    b.onclick = () => { if (pending) stopPending(); cur = c; renderChat(); renderList(); closeSideOnPhone(); };
     list.appendChild(b);
   }
 }
+// On a phone the sidebar overlays the chat, so close it after picking something.
+function closeSideOnPhone() { if (innerWidth < 760) document.body.classList.add('collapsed'); }
 function newChat() {
+  closeSideOnPhone();
   if (pending) stopPending();
   cur = null; renderChat(); renderList(); input.focus();
 }
