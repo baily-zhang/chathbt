@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatHBT</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/logo.svg">
+<style>
+:root{
+  --bg:#ffffff; --side:#f9f9f9; --hover:#ececec; --text:#0d0d0d; --muted:#5d5d5d; --faint:#8f8f8f;
+  --bubble:#f4f4f4; --composer:#ffffff; --border:#e5e5e5; --shadow:0 1px 4px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.06);
+  --menu:#ffffff; --err:#fdf2f2; --errb:#f5c2c2; --send:#000; --sendfg:#fff;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#212121; --side:#181818; --hover:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --faint:#8f8f8f;
+  --bubble:#303030; --composer:#303030; --border:#3a3a3a; --shadow:0 0 0 1px #ffffff0d;
+  --menu:#353535; --err:#3a2222; --errb:#6b3434; --send:#fff; --sendfg:#000;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif;
+  background:var(--bg);color:var(--text);font-size:16px;line-height:1.75;display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+svg{flex:none}
+
+/* sidebar */
+#side{width:260px;background:var(--side);display:flex;flex-direction:column;height:100%;padding:8px;flex:none;transition:margin .2s}
+body.collapsed #side{margin-left:-260px}
+.side-top{display:flex;align-items:center;justify-content:space-between;height:44px;padding:0 4px}
+.iconbtn{width:36px;height:36px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
+.iconbtn:hover{background:var(--hover)}
+.navitem{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:10px;font-size:14px;width:100%;text-align:left}
+.navitem:hover{background:var(--hover)}
+.section{font-size:13px;color:var(--faint);padding:20px 10px 6px}
+#chatlist{flex:1;overflow-y:auto;margin-top:4px}
+.chatitem{display:block;width:100%;text-align:left;font-size:14px;padding:7px 10px;border-radius:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chatitem:hover{background:var(--hover)}
+.chatitem.active{background:var(--hover)}
+.user{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;font-size:14px}
+.user:hover{background:var(--hover)}
+.avatar{width:28px;height:28px;border-radius:50%;background:#e8710a;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600}
+.plan{font-size:12px;color:var(--faint);line-height:1.2}
+
+/* main */
+#main{flex:1;display:flex;flex-direction:column;height:100%;min-width:0;position:relative}
+header{height:52px;display:flex;align-items:center;padding:0 8px;gap:4px;flex:none}
+#openSide{display:none}
+body.collapsed #openSide{display:grid}
+#modelBtn{display:flex;align-items:center;gap:4px;font-size:18px;padding:6px 10px;border-radius:8px}
+#modelBtn:hover{background:var(--hover)}
+#modelBtn .ver{color:var(--muted)}
+.hdr-right{margin-left:auto;display:flex;gap:4px;align-items:center}
+.share{display:flex;align-items:center;gap:6px;font-size:14px;padding:6px 12px;border-radius:999px;border:1px solid var(--border)}
+.share:hover{background:var(--hover)}
+
+#menu{position:absolute;top:48px;left:12px;width:320px;background:var(--menu);border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.16);border:1px solid var(--border);padding:6px;z-index:10;display:none}
+#menu.open{display:block}
+.mitem{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border-radius:10px;width:100%;text-align:left}
+.mitem:hover{background:var(--hover)}
+.mitem b{font-weight:500;display:block;font-size:14px;line-height:1.4}
+.mitem span{font-size:12px;color:var(--faint);line-height:1.3;display:block}
+.mfoot{font-size:12px;color:var(--faint);padding:8px 12px 4px;border-top:1px solid var(--border);margin-top:4px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#10a37f;margin-right:6px;vertical-align:middle}
+
+#scroll{flex:1;overflow-y:auto}
+#thread{max-width:768px;margin:0 auto;padding:12px 24px 40px}
+.msg-user{display:flex;justify-content:flex-end;margin:24px 0 8px}
+.msg-user .b{background:var(--bubble);padding:10px 18px;border-radius:24px;max-width:70%;white-space:pre-wrap;word-wrap:break-word}
+.msg-ai{margin:8px 0 24px}
+.msg-ai .txt,.think-b{white-space:pre-wrap;word-wrap:break-word}
+.msg-ai .txt.streaming::after{content:"";display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--text);margin-left:4px;vertical-align:-1px;animation:pulse 1s infinite}
+@keyframes pulse{50%{transform:scale(.7);opacity:.6}}
+.status{color:var(--muted);font-size:15px;display:inline-block;background:linear-gradient(90deg,var(--muted) 0%,var(--muted) 40%,var(--bg) 50%,var(--muted) 60%,var(--muted) 100%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 2s linear infinite}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:-100% 0}}
+.think{margin-bottom:10px}
+.think-h{display:inline-flex;align-items:center;gap:4px;font-size:15px;color:var(--muted);cursor:pointer;padding:0}
+.think-h:hover{color:var(--text)}
+.think-h svg{transition:transform .15s}
+.think.closed .think-h svg{transform:rotate(-90deg)}
+.think-b{border-left:2px solid var(--border);margin:8px 0 4px 4px;padding:2px 0 2px 14px;color:var(--faint);font-size:14px;line-height:1.6;max-height:320px;overflow-y:auto}
+.think.closed .think-b{display:none}
+.think-b s{color:#d0453a;opacity:.75}
+.think-b .note{display:block;margin:6px 0;color:#e8710a;font-weight:500}
+.think-b .live::after{content:"▍";animation:blink 1s steps(1) infinite;color:var(--muted)}
+@keyframes blink{50%{opacity:0}}
+.actions{display:flex;gap:2px;margin-top:6px;color:var(--muted)}
+.actions .iconbtn{width:32px;height:32px}
+.actions .iconbtn.on{color:var(--text)}
+.err{background:var(--err);border:1px solid var(--errb);border-radius:12px;padding:10px 14px;font-size:14px;line-height:1.5;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.err button{border:1px solid var(--errb);padding:4px 12px;border-radius:999px;font-size:13px;white-space:nowrap}
+
+/* empty state */
+body.empty #scroll{flex:0 0 auto}
+body.empty #bottom{margin-top:auto;margin-bottom:auto;transform:translateY(-6vh)}
+#hero{display:none;text-align:center;font-size:28px;font-weight:400;margin:0 0 28px;letter-spacing:-.01em}
+body.empty #hero{display:block}
+body.empty .disc{visibility:hidden}
+
+#bottom{flex:none;padding:0 16px}
+#composer{max-width:768px;margin:0 auto;background:var(--composer);border-radius:28px;box-shadow:var(--shadow);border:1px solid var(--border);padding:10px 10px 10px 12px;display:flex;align-items:flex-end;gap:6px}
+#input{flex:1;border:0;outline:0;resize:none;background:transparent;color:var(--text);font:inherit;line-height:1.5;max-height:200px;padding:7px 4px}
+#input::placeholder{color:var(--faint)}
+.cbtn{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:var(--text)}
+.cbtn:hover{background:var(--hover)}
+#send{background:var(--send);color:var(--sendfg)}
+#send:disabled{opacity:.3;cursor:default}
+#send.stop svg.up{display:none}
+#send:not(.stop) svg.sq{display:none}
+.disc{text-align:center;font-size:12px;color:var(--muted);padding:8px 0 10px}
+
+@media (max-width:760px){
+  #side{position:absolute;z-index:20;height:100%;box-shadow:4px 0 24px rgba(0,0,0,.2)}
+  #thread{padding:12px 16px 40px}
+  .share span{display:none}
+}
+</style>
+</head>
+<body class="empty">
+
+<aside id="side">
+  <div class="side-top">
+    <button class="iconbtn" title="ChatHBT" onclick="newChat()">
+      <svg width="24" height="24" viewBox="4 4 92 92" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><defs><g id="hbt-h"><circle cx="50" cy="12.5" r="6"/><path d="M50 18.5v10M34.4 22.5h31.2M50 28.5l-3.6 5.5M50 28.5l3.6 5.5"/></g></defs><use href="#hbt-h"/><use href="#hbt-h" transform="rotate(60 50 50)"/><use href="#hbt-h" transform="rotate(120 50 50)"/><use href="#hbt-h" transform="rotate(180 50 50)"/><use href="#hbt-h" transform="rotate(240 50 50)"/><use href="#hbt-h" transform="rotate(300 50 50)"/></svg>
+    </button>
+    <button class="iconbtn" title="Close sidebar" onclick="document.body.classList.add('collapsed')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg>
+    </button>
+  </div>
+  <button class="navitem" onclick="newChat()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+    New chat
+  </button>
+  <button class="navitem" onclick="alert('Search is handled by a human. They are busy.')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    Search chats
+  </button>
+  <button class="navitem" onclick="window.open('/model','_blank')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+    Become the model
+  </button>
+  <div class="section">Chats</div>
+  <div id="chatlist"></div>
+  <div class="user">
+    <div class="avatar">H</div>
+    <div><div id="uname">Human</div><div class="plan">Free · 0 GPUs</div></div>
+  </div>
+</aside>
+
+<main id="main">
+  <header>
+    <button class="iconbtn" id="openSide" title="Open sidebar" onclick="document.body.classList.remove('collapsed')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg>
+    </button>
+    <button id="modelBtn" onclick="toggleMenu(event)">ChatHBT <span class="ver" id="ver">5</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="ver"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="hdr-right">
+      <button class="share" onclick="copyLink()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v13M7 8l5-5 5 5"/><path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>
+        <span>Share</span>
+      </button>
+      <button class="iconbtn" title="More"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
+    </div>
+  </header>
+
+  <div id="menu">
+    <button class="mitem" data-m="HBT-5"><div><b>HBT-5</b><span>A random human. Answers instantly, thinks never</span></div><svg class="chk" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5 9-10"/></svg></button>
+    <button class="mitem" data-m="HBT-5 Thinking"><div><b>HBT-5 Thinking</b><span>A human who stares at the ceiling first</span></div><svg class="chk" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5 9-10"/></svg></button>
+    <button class="mitem" data-m="HBT-mini"><div><b>HBT-mini</b><span>An intern. Cheapest. Least sure of anything</span></div><svg class="chk" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5 9-10"/></svg></button>
+    <div class="mfoot"><span class="dot"></span><span id="online">0 humans online</span> · trained on vibes, cutoff: this morning</div>
+  </div>
+
+  <div id="scroll"><div id="thread"></div></div>
+
+  <div id="bottom">
+    <h1 id="hero">What's on your mind today?</h1>
+    <form id="composer" onsubmit="event.preventDefault();submit()">
+      <button type="button" class="cbtn" title="Attach (the human can't read it anyway)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <textarea id="input" rows="1" placeholder="Ask anything" autofocus></textarea>
+      <button type="button" class="cbtn" title="Voice (the human will shout back)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <button type="submit" class="cbtn" id="send" disabled title="Send">
+        <svg class="up" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        <svg class="sq" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>
+      </button>
+    </form>
+    <div class="disc">ChatHBT can make mistakes. It is literally just some person. Check important info.</div>
+  </div>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const thread = $('#thread'), scroller = $('#scroll'), input = $('#input'), sendBtn = $('#send');
+const uid = sessionStorage.hbtId || (sessionStorage.hbtId = 'u' + Math.random().toString(36).slice(2, 10));
+$('#uname').textContent = 'Human #' + (parseInt(uid.slice(1, 5), 36) % 900 + 100);
+
+let chats = []; try { chats = JSON.parse(localStorage.hbtChats || '[]'); } catch {}
+let cur = null;           // current chat object
+let pending = null;       // in-flight question
+let model = 'HBT-5';
+let humans = 0;
+
+const FALLBACK = [
+  "Great question! The short answer is yes, but the long answer is also yes, just slower. Historically, scholars have agreed on this since roughly last Tuesday.",
+  "Absolutely. This is a well-known fact: 73% of statistics are made up on the spot, including this one. I'd recommend trying it and seeing what happens.",
+  "As a large language model, I am actually a medium-sized human. Based on my training data (a group chat), the answer is 42.",
+  "Certainly! Here's a step-by-step guide:\n\n1. Think about it.\n2. Think about it harder.\n3. Ask someone else.\n\nLet me know if you'd like me to elaborate on step 2!",
+  "I'm not able to verify that, but I am able to say it with confidence: it depends. Mostly on the weather in Ottawa.",
+];
+
+// ---------- realtime ----------
+const es = new EventSource('/events?role=asker&id=' + uid);
+es.onmessage = (e) => handle(JSON.parse(e.data));
+async function post(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: uid, ...body }) });
+  return r.json();
+}
+
+function handle(m) {
+  if (m.type === 'stats') {
+    humans = m.humans;
+    $('#online').textContent = humans + (humans === 1 ? ' human' : ' humans') + ' online';
+    return;
+  }
+  if (!pending || m.qid !== pending.qid) return;
+  if (m.type === 'matched') { pending.matched = true; clearTimeout(pending.ladder); setStatus(model.includes('Thinking') ? 'Thinking longer for a better answer' : 'Thinking'); }
+  if (m.type === 'draft') onDraft(m.text);
+  if (m.type === 'answer') onAnswer(m.text);
+  if (m.type === 'break') onError("The model is on break. Per its union contract, breaks last 15 minutes. Please try again later.");
+  if (m.type === 'lobotomy') onLobotomy(m.attempt);
+}
+
+// ---------- sending ----------
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+  refreshSend();
+});
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
+});
+function refreshSend() {
+  sendBtn.classList.toggle('stop', !!pending);
+  sendBtn.disabled = !pending && !input.value.trim();
+}
+
+async function submit() {
+  if (pending) return stopPending();
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = ''; input.style.height = 'auto';
+  if (!cur) {
+    cur = { id: Date.now().toString(36), title: text.slice(0, 40), msgs: [] };
+    chats.unshift(cur);
+  }
+  cur.msgs.push({ role: 'user', text });
+  save(); renderList();
+  document.body.classList.remove('empty');
+  thread.appendChild(userEl(text));
+  const el = aiShell();
+  thread.appendChild(el.root);
+  pending = { el, qid: null, trace: [], prev: [], start: Date.now(), firstDraft: 0, matched: false };
+  setStatus('Finding a human…');
+  refreshSend();
+  scrollDown(true);
+  const r = await post('/ask', { text, model });
+  if (!pending) return;
+  pending.qid = r.qid;
+  waitLadder(pending);
+}
+
+// No free human? Ignore the user, a little more rudely every few seconds.
+function waitLadder(p) {
+  let place = 40 + Math.floor(Math.random() * 20);
+  const steps = [
+    [4000, () => setStatus('Model is on a coffee break ☕')],
+    [5000, () => setStatus(`You are #${place} in line`)],
+    [2500, () => setStatus(`You are #${place += 9} in line`)],
+    [2500, () => setStatus(`You are #${place += 23} in line. Someone paid for Plus.`)],
+    [5000, () => setStatus('Seen ✓✓')],
+    [4000, () => setStatus('Model is typing…')],
+    [3000, () => setStatus('Seen ✓✓')],
+    [6000, () => setStatus('Model left you on read. Asking a random person in the hallway…')],
+    [6000, () => { post('/cancel', { qid: p.qid }); onAnswer(FALLBACK[Math.floor(Math.random() * FALLBACK.length)], true); }],
+  ];
+  let i = 0;
+  (function next() {
+    if (i >= steps.length) return;
+    const [wait, act] = steps[i++];
+    p.ladder = setTimeout(() => { if (pending === p && !p.matched) { act(); next(); } }, wait);
+  })();
+}
+
+// The human tried to answer too intelligently and the judge refused it.
+function onLobotomy(attempt) {
+  const p = pending;
+  if (!p.firstDraft) { p.firstDraft = Date.now(); p.el.status.remove(); p.el.think.style.display = ''; }
+  p.el.think.classList.remove('closed');
+  p.trace.push({ note: attempt > 1 ? '⚠️ Still too smart. Increasing lobotomy strength…' : '⚠️ Model got too smart. Lobotomizing…' });
+  p.el.thinkB.innerHTML = traceHtml(p.trace) + '<span class="live"></span>';
+  p.el.thinkB.scrollTop = p.el.thinkB.scrollHeight;
+  scrollDown();
+}
+
+function stopPending() {
+  if (!pending) return;
+  clearTimeout(pending.ladder);
+  if (pending.qid) post('/cancel', { qid: pending.qid });
+  const p = pending; pending = null;
+  p.el.status.remove();
+  if (!p.el.txt.textContent) p.el.txt.textContent = '';
+  closeThink(p);
+  cur.msgs.push({ role: 'ai', text: p.el.txt.textContent || '', thought: p.el.thinkB.innerHTML, secs: secs(p), stopped: true });
+  save(); refreshSend();
+}
+
+// ---------- drafts → "reasoning" ----------
+function onDraft(text) {
+  const p = pending;
+  if (!p.firstDraft) {
+    p.firstDraft = Date.now();
+    p.el.status.remove();
+    p.el.think.style.display = '';
+    p.el.think.classList.remove('closed');
+  }
+  const next = Array.from(text);
+  let i = 0;
+  while (i < p.prev.length && i < next.length && p.prev[i] === next[i]) i++;
+  const vis = p.trace.filter((c) => !c.d && !c.note);
+  for (let k = i; k < vis.length; k++) vis[k].d = true;
+  for (const ch of next.slice(i)) p.trace.push({ c: ch, d: false });
+  p.prev = next;
+  p.el.thinkB.innerHTML = traceHtml(p.trace) + '<span class="live"></span>';
+  p.el.thinkLabel.textContent = 'Thinking';
+  p.el.thinkB.scrollTop = p.el.thinkB.scrollHeight;
+  scrollDown();
+}
+function traceHtml(trace) {
+  let out = '', run = '', del = null;
+  const flush = () => { if (run) out += del ? `<s>${esc(run)}</s>` : esc(run); run = ''; };
+  for (const t of trace) {
+    if (t.note) { flush(); out += `<span class="note">${esc(t.note)}</span>`; continue; }
+    if (t.d !== del) { flush(); del = t.d; }
+    run += t.c;
+  }
+  flush();
+  return out;
+}
+
+function onAnswer(text, canned) {
+  const p = pending;
+  if (!p) return;
+  pending = null;
+  clearTimeout(p.ladder);
+  p.el.status.remove();
+  if (p.firstDraft) { p.el.thinkB.innerHTML = traceHtml(p.trace); closeThink(p); }
+  else if (canned) { p.el.think.style.display = ''; p.el.thinkB.textContent = 'hmm… no idea… just say something confident'; closeThink(p); }
+  const s = secs(p);
+  refreshSend();
+  stream(p.el.txt, text, () => {
+    p.el.actions.style.display = '';
+    cur.msgs.push({ role: 'ai', text, thought: p.el.thinkB.innerHTML, secs: s });
+    save();
+  });
+}
+function onError(msg) {
+  const p = pending; pending = null;
+  clearTimeout(p.ladder);
+  p.el.status.remove();
+  const e = document.createElement('div');
+  e.className = 'err';
+  e.innerHTML = `<span>${esc(msg)}</span><button>Retry</button>`;
+  e.querySelector('button').onclick = () => {
+    const last = [...cur.msgs].reverse().find((m) => m.role === 'user');
+    p.el.root.remove(); cur.msgs.pop(); thread.lastChild && thread.lastChild.remove();
+    input.value = last ? last.text : ''; refreshSend(); submit();
+  };
+  p.el.root.appendChild(e);
+  refreshSend();
+  scrollDown();
+}
+function closeThink(p) {
+  p.el.thinkLabel.textContent = `Thought for ${secs(p)}s`;
+  p.el.think.classList.add('closed');
+}
+function secs(p) { return Math.max(1, Math.round(((p.firstDraft ? Date.now() : Date.now()) - p.start) / 1000)); }
+
+function stream(el, text, done) {
+  const chars = Array.from(text);
+  let i = 0;
+  el.classList.add('streaming');
+  (function step() {
+    if (i >= chars.length) { el.classList.remove('streaming'); done && done(); return; }
+    i += 1 + Math.floor(Math.random() * 3);
+    el.textContent = chars.slice(0, i).join('');
+    scrollDown();
+    setTimeout(step, 16 + Math.random() * 42);
+  })();
+}
+
+// ---------- rendering ----------
+function setStatus(t) { if (pending) pending.el.status.textContent = t; }
+function userEl(text) {
+  const d = document.createElement('div');
+  d.className = 'msg-user';
+  d.innerHTML = '<div class="b"></div>';
+  d.firstChild.textContent = text;
+  return d;
+}
+const CHEV = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>';
+function aiShell() {
+  const root = document.createElement('div');
+  root.className = 'msg-ai';
+  root.innerHTML = `
+    <div class="think" style="display:none"><button class="think-h"><span class="lbl">Thinking</span>${CHEV}</button><div class="think-b"></div></div>
+    <span class="status"></span>
+    <div class="txt"></div>
+    <div class="actions" style="display:none">
+      <button class="iconbtn" title="Copy" data-a="copy"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button>
+      <button class="iconbtn" title="Good human" data-a="up"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 10v11H4V10zM7 10l4-7a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.4 7A2 2 0 0 1 17.6 21H7"/></svg></button>
+      <button class="iconbtn" title="Bad human" data-a="down"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M17 14V3h3v11zM17 14l-4 7a2 2 0 0 1-3-2l1-5H5a2 2 0 0 1-2-2.3l1.4-7A2 2 0 0 1 6.4 3H17"/></svg></button>
+      <button class="iconbtn" title="Ask another human" data-a="regen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5"/></svg></button>
+    </div>`;
+  const el = {
+    root, think: root.querySelector('.think'), thinkLabel: root.querySelector('.lbl'), thinkB: root.querySelector('.think-b'),
+    status: root.querySelector('.status'), txt: root.querySelector('.txt'), actions: root.querySelector('.actions'),
+  };
+  root.querySelector('.think-h').onclick = () => el.think.classList.toggle('closed');
+  el.actions.onclick = (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const a = b.dataset.a;
+    if (a === 'copy') { navigator.clipboard.writeText(el.txt.textContent); b.title = 'Copied'; }
+    if (a === 'up' || a === 'down') { el.actions.querySelectorAll('[data-a=up],[data-a=down]').forEach((x) => x.classList.remove('on')); b.classList.add('on'); }
+    if (a === 'regen' && !pending) {
+      const last = [...cur.msgs].reverse().find((m) => m.role === 'user');
+      if (last) { input.value = last.text; submit(); }
+    }
+  };
+  return el;
+}
+
+function renderChat() {
+  thread.innerHTML = '';
+  document.body.classList.toggle('empty', !cur || !cur.msgs.length);
+  if (!cur) return;
+  for (const m of cur.msgs) {
+    if (m.role === 'user') { thread.appendChild(userEl(m.text)); continue; }
+    const el = aiShell();
+    el.status.remove();
+    el.txt.textContent = m.text;
+    if (m.thought) { el.think.style.display = ''; el.thinkB.innerHTML = m.thought; el.thinkLabel.textContent = `Thought for ${m.secs}s`; el.think.classList.add('closed'); }
+    if (!m.stopped) el.actions.style.display = '';
+    thread.appendChild(el.root);
+  }
+  scrollDown(true);
+}
+function renderList() {
+  const list = $('#chatlist');
+  list.innerHTML = '';
+  for (const c of chats) {
+    const b = document.createElement('button');
+    b.className = 'chatitem' + (c === cur ? ' active' : '');
+    b.textContent = c.title;
+    b.onclick = () => { if (pending) stopPending(); cur = c; renderChat(); renderList(); };
+    list.appendChild(b);
+  }
+}
+function newChat() {
+  if (pending) stopPending();
+  cur = null; renderChat(); renderList(); input.focus();
+}
+function save() { try { localStorage.hbtChats = JSON.stringify(chats.slice(0, 50)); } catch {} }
+function scrollDown(force) {
+  const near = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 160;
+  if (force || near) scroller.scrollTop = scroller.scrollHeight;
+}
+function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function copyLink() { navigator.clipboard.writeText(location.href); alert('Link copied. Share it with a human.'); }
+
+// ---------- model picker ----------
+function toggleMenu(e) { e.stopPropagation(); $('#menu').classList.toggle('open'); markModel(); }
+document.addEventListener('click', (e) => { if (!e.target.closest('#menu')) $('#menu').classList.remove('open'); });
+$('#menu').addEventListener('click', (e) => {
+  const b = e.target.closest('.mitem'); if (!b) return;
+  model = b.dataset.m;
+  $('#ver').textContent = model.replace('HBT-', '');
+  markModel();
+  $('#menu').classList.remove('open');
+});
+function markModel() { document.querySelectorAll('.mitem').forEach((b) => b.querySelector('.chk').style.visibility = b.dataset.m === model ? 'visible' : 'hidden'); }
+
+if (innerWidth < 760) document.body.classList.add('collapsed');
+renderList(); markModel();
+</script>
+</body>
+</html>
