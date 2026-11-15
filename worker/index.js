@@ -39,7 +39,7 @@ export class Hub {
       return new Response(readable, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform' } });
     }
     if (url.pathname === '/poll') return json(this.hub.poll(q.get('id'), q.get('role'), q.get('since')));
-    if (url.pathname === '/health') return new Response('ok');
+    if (url.pathname === '/health') return new Response(`ok limit=${this.hub.smartLimit}`);
     const route = this.hub.routes[url.pathname];
     if (request.method === 'POST' && route) {
       let body = {};

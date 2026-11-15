@@ -202,6 +202,7 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
   return {
     routes,
     tick,
+    smartLimit: SMART_LIMIT,
     judgeLabel: apiKey ? `AI (${judgeModel})` : 'heuristic only (set ANTHROPIC_API_KEY for AI)',
     // A live stream opened. Returns a function to call when it closes.
     connect(id, role, write) {
