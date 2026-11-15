@@ -1,0 +1,9 @@
+{
+  "name": "chathbt",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ChatGPT, but the model is a random human.",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
