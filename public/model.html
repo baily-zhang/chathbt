@@ -70,13 +70,14 @@ body.asleep #idle{display:none}
     <div class="big">🧠</div>
     <div style="font-size:18px;color:var(--text);margin-bottom:6px">You are now a large language model.</div>
     <div>Waiting for a user prompt… keep this tab open.</div>
+    <button id="idleBreak" style="margin-top:18px">☕ Take a break</button>
   </div>
 
   <div class="card" id="zzz">
-    <div class="big">😴</div>
-    <div style="font-size:18px;color:var(--text);margin-bottom:6px">You fell asleep. The prompt went to another human.</div>
-    <div style="margin-bottom:16px">Your GPU has been downclocked.</div>
-    <button class="primary" id="wake">I'm awake, give me prompts</button>
+    <div class="big" id="zIcon">😴</div>
+    <div style="font-size:18px;color:var(--text);margin-bottom:6px" id="zTitle"></div>
+    <div style="margin-bottom:16px" id="zSub"></div>
+    <button class="primary" id="wake"></button>
   </div>
   <div id="work">
     <div class="card" id="qcard">
@@ -149,7 +150,7 @@ function onMsg(m) {
   if (m.type === 'stats') $('#stats').textContent = `${m.humans} human${m.humans === 1 ? '' : 's'} online · ${m.queue} in queue`;
   if (m.type === 'question') start(m);
   if (m.type === 'cancel' && m.qid === qid) { stop(); toast('User stopped generating.'); }
-  if (m.type === 'asleep' && m.qid === qid) { stop(); sleepy(true); }
+  if (m.type === 'asleep' && m.qid === qid) { stop(); offDuty('asleep'); }
 }
 
 async function post(url, body) {
@@ -232,7 +233,8 @@ function buzz() {
   } catch {}
   navigator.vibrate && navigator.vibrate([80, 40, 80]);
 }
-$('#bathroom').onclick = async () => { if (!qid) return; const q = qid; stop(); await post('/break', { qid: q }); };
+$('#bathroom').onclick = takeBreak;
+async function takeBreak() { const q = qid; stop(); offDuty('break'); await post('/break', { qid: q }); }
 function insert(t, atStart) {
   out.value = atStart ? t + out.value : out.value + t;
   out.dispatchEvent(new Event('input')); out.focus();
@@ -249,12 +251,21 @@ function beep() {
 }
 function toast(t) { const s = $('#stats'); const old = s.textContent; s.textContent = t; setTimeout(() => (s.textContent = old), 2500); }
 
-// Fell asleep on a prompt: no more prompts until the human proves they are awake.
-function sleepy(on) {
-  document.body.classList.toggle('asleep', on);
-  if (on) { document.title = '😴 You fell asleep — HBT'; buzz(); }
+// Off duty (on break, or fell asleep on a prompt): no prompts until the human clocks back in.
+const OFF = {
+  asleep: ['😴', 'You fell asleep. The prompt went to another human.', 'Your GPU has been downclocked.', "I'm awake, give me prompts", '😴 You fell asleep — HBT'],
+  break: ['☕', 'You are on break.', 'No prompts will reach you. Users are being told the model is unionized.', 'Back to work', '☕ On break — HBT'],
+};
+function offDuty(kind) {
+  document.body.classList.toggle('asleep', !!kind);
+  if (!kind) { document.title = 'HBT Model Console'; return; }
+  const [icon, title, sub, btn, tab] = OFF[kind];
+  $('#zIcon').textContent = icon; $('#zTitle').textContent = title; $('#zSub').textContent = sub; $('#wake').textContent = btn;
+  document.title = tab;
+  if (kind === 'asleep') buzz();
 }
-$('#wake').onclick = async () => { sleepy(false); document.title = 'HBT Model Console'; await post('/wake', {}); };
+$('#idleBreak').onclick = takeBreak;
+$('#wake').onclick = async () => { offDuty(null); await post('/wake', {}); };
 connect('model', id, onMsg, onState);
 </script>
 </body>

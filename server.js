@@ -192,8 +192,11 @@ const routes = {
     return { ok: true };
   },
   async '/break'(b) {
+    const c = clients.get(b.id);
+    if (c) c.asleep = true; // on break: no prompts until /wake
     const q = mine(b);
-    if (q) { send(q.askerId, { type: 'break', qid: q.qid }); finish(q.qid); assign(); }
+    if (q) { send(q.askerId, { type: 'break', qid: q.qid }); finish(q.qid); }
+    assign();
     return { ok: true };
   },
   async '/cancel'(b) {
