@@ -175,7 +175,7 @@ body.empty .disc{visibility:hidden}
 
   <div id="bottom">
     <h1 id="hero">What's on your mind today?</h1>
-    <form id="composer" onsubmit="event.preventDefault();submit()">
+    <form id="composer">
       <button type="button" class="cbtn" title="Attach (the human can't read it anyway)">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
       </button>
@@ -257,15 +257,16 @@ input.addEventListener('input', () => {
   input.style.height = Math.min(input.scrollHeight, 200) + 'px';
   refreshSend();
 });
+$('#composer').addEventListener('submit', (e) => { e.preventDefault(); sendMessage(); });
 input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!pending) sendMessage(); } // like ChatGPT: Enter does nothing while generating
 });
 function refreshSend() {
   sendBtn.classList.toggle('stop', !!pending);
   sendBtn.disabled = !pending && !input.value.trim();
 }
 
-async function submit() {
+async function sendMessage() {
   if (pending) return stopPending();
   const text = input.value.trim();
   if (!text) return;
@@ -396,7 +397,7 @@ function onError(msg) {
   e.querySelector('button').onclick = () => {
     const last = [...cur.msgs].reverse().find((m) => m.role === 'user');
     p.el.root.remove(); cur.msgs.pop(); thread.lastChild && thread.lastChild.remove();
-    input.value = last ? last.text : ''; refreshSend(); submit();
+    input.value = last ? last.text : ''; refreshSend(); sendMessage();
   };
   p.el.root.appendChild(e);
   refreshSend();
@@ -456,7 +457,7 @@ function aiShell() {
     if (a === 'up' || a === 'down') { el.actions.querySelectorAll('[data-a=up],[data-a=down]').forEach((x) => x.classList.remove('on')); b.classList.add('on'); }
     if (a === 'regen' && !pending) {
       const last = [...cur.msgs].reverse().find((m) => m.role === 'user');
-      if (last) { input.value = last.text; submit(); }
+      if (last) { input.value = last.text; sendMessage(); }
     }
   };
   return el;
