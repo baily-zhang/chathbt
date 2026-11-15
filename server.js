@@ -1,4 +1,4 @@
-// ChatHBT — Human Bullshitting Transformer
+// ChatHBT — Human Bullsh*tting Transformer
 // Zero-dependency Node server. All the rules live in hub.js; this file is just HTTP.
 //   Server -> browser: Server-Sent Events on /events (or /poll if a proxy buffers SSE)
 //   Browser -> server: JSON POSTs (/ask, /draft, /answer, /break, /wake, /cancel)

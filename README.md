@@ -1,6 +1,6 @@
 # ChatHBT
 
-**HBT = Human Bullshitting Transformer.**
+**HBT = Human Bullsh*tting Transformer.** *(We censored it because the model is a professional.)*
 
 ChatHBT looks exactly like ChatGPT, but there is no AI. Every answer is typed live by a random human.
 
