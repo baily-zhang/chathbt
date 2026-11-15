@@ -150,7 +150,7 @@ function connect(role, id, onMsg, onState) {
   setTimeout(() => { if (!live) { es.close(); polling = true; onState && onState(true); poll(); } }, 2500);
   function poll() {
     fetch(`/poll?role=${role}&id=${id}&since=${last}`).then((r) => r.json()).then((ms) => ms.forEach(deliver))
-      .catch(() => {}).finally(() => setTimeout(poll, 350));
+      .catch(() => {}).finally(() => setTimeout(poll, 1000));
   }
 }
 function onState(ok) { $('#state').textContent = ok ? '● online' : '○ reconnecting'; $('#state').classList.toggle('live', ok); }
@@ -203,7 +203,7 @@ out.addEventListener('input', () => {
   sendT = setTimeout(() => {
     sendT = null;
     if (qid && out.value !== lastSent) { lastSent = out.value; post('/draft', { qid, text: out.value }); }
-  }, 90);
+  }, 300); // every draft is a request; 300ms keeps 200 people inside the free plan
 });
 out.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } });
 $('#submit').onclick = submit;

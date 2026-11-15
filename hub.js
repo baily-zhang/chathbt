@@ -59,9 +59,15 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
   }
   const humans = () => [...clients].filter(([, c]) => c.role === 'model');
 
+  // Online counts go to everyone, so with hundreds of people they are coalesced to at most once a second.
+  let statsTimer = null;
   function broadcastStats() {
-    const stats = { type: 'stats', humans: humans().length, busy: humans().filter(([, c]) => c.busy).length, queue: queue.length };
-    for (const id of clients.keys()) send(id, stats);
+    if (statsTimer) return;
+    statsTimer = setTimeout(() => {
+      statsTimer = null;
+      const stats = { type: 'stats', humans: humans().length, busy: humans().filter(([, c]) => c.busy).length, queue: queue.length };
+      for (const id of clients.keys()) send(id, stats);
+    }, 1000);
   }
 
   // Hand queued questions to random idle humans.
@@ -78,7 +84,6 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
       send(mid, { type: 'question', qid: q.qid, text: q.text, model: q.model });
       send(q.askerId, { type: 'matched', qid: q.qid });
     }
-    queue.forEach((qid, i) => { const q = questions.get(qid); if (q) send(q.askerId, { type: 'waiting', qid, position: i + 1 }); });
     broadcastStats();
   }
 

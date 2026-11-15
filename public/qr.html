@@ -23,25 +23,34 @@ header h1{font-size:clamp(28px,5vw,44px);margin:0;font-weight:600;letter-spacing
 .url{margin-top:14px;font:13px ui-monospace,Menlo,monospace;color:var(--muted);word-break:break-all}
 .card.model{border-color:#10a37f66}
 .card.model h2{color:#4fd1a8}
+/* single mode: one huge code per screen so nobody scans the wrong one */
+body.single .card{width:min(560px,94vw);padding:32px}
+body.single .card h2{font-size:clamp(28px,4vw,40px)}
+body.single .card p{font-size:18px}
+body.single .qr img,body.single .qr canvas{width:min(440px,78vw,62vh)!important}
+.switch{display:flex;gap:10px}
+.switch a{color:var(--muted);text-decoration:none;font-size:14px;border:1px solid var(--line);border-radius:999px;padding:6px 14px}
+.switch a.on{color:var(--text);border-color:#ffffff55}
 </style>
 </head>
 <body>
 <header><img src="/logo.svg" alt=""><h1>ChatHBT</h1></header>
 <p class="tag">ChatGPT, but the model is a random human. Possibly you.</p>
 <div class="cards">
-  <div class="card">
+  <div class="card" id="cardChat">
     <h2>💬 Ask ChatHBT</h2>
     <p>Ask anything. A human will make something up.</p>
     <div class="qr" id="qrChat"></div>
     <div class="url" id="urlChat"></div>
   </div>
-  <div class="card model">
+  <div class="card model" id="cardModel">
     <h2>🧠 Become the model</h2>
     <p>Answer strangers. Be dumb or be rejected.</p>
     <div class="qr" id="qrModel"></div>
     <div class="url" id="urlModel"></div>
   </div>
 </div>
+<nav class="switch"><a href="/qr?for=ask" id="swAsk">Ask only</a><a href="/qr?for=model" id="swModel">Model only</a><a href="/qr" id="swBoth">Both</a></nav>
 <script>
 const base = location.origin;
 const make = (el, url) => {
@@ -49,8 +58,15 @@ const make = (el, url) => {
   if (window.QRCode) new QRCode(document.getElementById('qr' + el), { text: url, width: 512, height: 512, colorDark: '#0d0d0d', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
   else document.getElementById('qr' + el).textContent = url; // QR library failed to load: show the link instead
 };
-make('Chat', base + '/');
-make('Model', base + '/model');
+// /qr?for=ask or /qr?for=model shows one big code; /qr shows both.
+const only = new URLSearchParams(location.search).get('for');
+if (only === 'ask' || only === 'model') {
+  document.body.classList.add('single');
+  document.getElementById(only === 'ask' ? 'cardModel' : 'cardChat').remove();
+}
+document.getElementById(only === 'ask' ? 'swAsk' : only === 'model' ? 'swModel' : 'swBoth').classList.add('on');
+if (only !== 'model') make('Chat', base + '/');
+if (only !== 'ask') make('Model', base + '/model');
 </script>
 </body>
 </html>

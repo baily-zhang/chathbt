@@ -253,7 +253,7 @@ function connect(role, id, onMsg, onState) {
   setTimeout(() => { if (!live) { es.close(); polling = true; onState && onState(true); poll(); } }, 2500);
   function poll() {
     fetch(`/poll?role=${role}&id=${id}&since=${last}`).then((r) => r.json()).then((ms) => ms.forEach(deliver))
-      .catch(() => {}).finally(() => setTimeout(poll, 350));
+      .catch(() => {}).finally(() => setTimeout(poll, 1000));
   }
 }
 connect('asker', uid, handle);
