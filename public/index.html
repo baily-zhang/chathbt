@@ -218,6 +218,11 @@ const thread = $('#thread'), scroller = $('#scroll'), input = $('#input'), sendB
 const uid = sessionStorage.hbtId || (sessionStorage.hbtId = 'u' + Math.random().toString(36).slice(2, 10));
 $('#uname').textContent = 'Human #' + (parseInt(uid.slice(1, 5), 36) % 900 + 100);
 
+// Open /?fresh to wipe this browser's chat history (handy before recording a demo).
+if (new URLSearchParams(location.search).has('fresh')) {
+  try { localStorage.removeItem('hbtChats'); sessionStorage.removeItem('hbtId'); } catch {}
+  location.replace('/');
+}
 let chats = []; try { chats = JSON.parse(localStorage.hbtChats || '[]'); } catch {}
 let cur = null;           // current chat object
 let pending = null;       // in-flight question
