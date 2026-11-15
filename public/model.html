@@ -145,8 +145,12 @@ const HINTS = {
 
 // Realtime: SSE first; if a proxy buffers it (no message within 2.5s), poll instead.
 function connect(role, id, onMsg, onState) {
-  let last = 0, live = false, polling = false;
-  const deliver = (m) => { if (m.seq <= last) return; last = m.seq; live = true; onMsg(m); };
+  let last = 0, live = false, polling = false, boot = null;
+  const deliver = (m) => {
+    if (m.boot !== boot) { if (boot) onMsg({ type: 'reboot' }); boot = m.boot; last = 0; } // server restarted: numbering starts over
+    if (m.seq <= last) return;
+    last = m.seq; live = true; onMsg(m);
+  };
   const es = new EventSource(`/events?role=${role}&id=${id}${STAGE ? '&stage' : ''}`);
   es.onmessage = (e) => deliver(JSON.parse(e.data));
   es.onopen = () => onState && onState(true);
@@ -159,6 +163,7 @@ function connect(role, id, onMsg, onState) {
 }
 function onState(ok) { $('#state').textContent = ok ? '● online' : '○ reconnecting'; $('#state').classList.toggle('live', ok); }
 function onMsg(m) {
+  if (m.type === 'reboot') { if (qid) { stop(); toast('Server rebooted. That prompt is gone.'); } return; }
   if (m.type === 'stats') $('#stats').textContent = `${m.humans} human${m.humans === 1 ? '' : 's'} online · ${m.queue} in queue`;
   if (m.type === 'question') start(m);
   if (m.type === 'cancel' && m.qid === qid) { stop(); toast(m.reason === 'slow' ? 'Too slow — the prompt went to a faster human.' : 'User stopped generating.'); }

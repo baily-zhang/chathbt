@@ -29,13 +29,15 @@ export function createHub({ apiKey, judgeModel = 'claude-haiku-5-5' } = {}) {
   const questions = new Map(); // qid -> { qid, askerId, text, model, modelId, rejects, active }
   const queue = [];            // qids waiting for a free human
   let qSeq = 1;
+  // Changes every time the hub starts, so pages can tell the server restarted (seq numbers start over).
+  const boot = Math.random().toString(36).slice(2, 8);
   const later = (fn) => Promise.resolve().then(fn);
 
   // ---------- messaging ----------
   function send(id, msg) {
     const c = clients.get(id);
     if (!c) return;
-    const m = { ...msg, seq: ++c.seq };
+    const m = { ...msg, seq: ++c.seq, boot };
     c.box.push(m);
     if (c.box.length > 300) c.box.splice(0, c.box.length - 300);
     if (c.write) {

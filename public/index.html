@@ -240,8 +240,12 @@ const FALLBACK = [
 // ---------- realtime ----------
 // Realtime: SSE first; if a proxy buffers it (no message within 2.5s), poll instead.
 function connect(role, id, onMsg, onState) {
-  let last = 0, live = false, polling = false;
-  const deliver = (m) => { if (m.seq <= last) return; last = m.seq; live = true; onMsg(m); };
+  let last = 0, live = false, polling = false, boot = null;
+  const deliver = (m) => {
+    if (m.boot !== boot) { if (boot) onMsg({ type: 'reboot' }); boot = m.boot; last = 0; } // server restarted: numbering starts over
+    if (m.seq <= last) return;
+    last = m.seq; live = true; onMsg(m);
+  };
   const es = new EventSource(`/events?role=${role}&id=${id}`);
   es.onmessage = (e) => deliver(JSON.parse(e.data));
   es.onopen = () => onState && onState(true);
@@ -271,6 +275,7 @@ function handle(m) {
     $('#online').textContent = humans + (humans === 1 ? ' human' : ' humans') + ' online';
     return;
   }
+  if (m.type === 'reboot') { if (pending && pending.qid) onError('The model rebooted mid-thought. Please ask again.'); return; }
   if (!pending) return;
   // Events can arrive before the /ask response tells us our qid: keep them until then.
   if (pending.qid == null) { pending.early.push(m); return; }
